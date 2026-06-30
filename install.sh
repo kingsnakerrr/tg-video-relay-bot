@@ -7,7 +7,7 @@ REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
-INSTALLER_VERSION="2026-06-30.2"
+INSTALLER_VERSION="2026-06-30.3"
 
 die() {
   echo "ERROR: $*" >&2
@@ -85,7 +85,11 @@ elif dir_is_not_empty "${APP_DIR}"; then
   if has_project_files "${APP_DIR}"; then
     step "Using existing project files"
   else
-    die "${APP_DIR} already exists and is not empty. Move it away or run with APP_DIR=/another/path."
+    BACKUP_DIR="${APP_DIR}.backup.$(date +%Y%m%d%H%M%S)"
+    step "${APP_DIR} exists but is not a valid install. Moving it to ${BACKUP_DIR}"
+    mv "${APP_DIR}" "${BACKUP_DIR}"
+    step "Cloning project from GitHub"
+    git clone --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}"
   fi
 else
   step "Cloning project from GitHub"
