@@ -7,6 +7,7 @@ REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
+INSTALLER_VERSION="2026-06-30.2"
 
 die() {
   echo "ERROR: $*" >&2
@@ -43,6 +44,8 @@ ask_required() {
 if [ "$(id -u)" -ne 0 ]; then
   die "Please run as root, for example: sudo bash install.sh"
 fi
+
+echo "Telegram Video Relay installer ${INSTALLER_VERSION}"
 
 step "Installing system packages"
 if command -v apt >/dev/null 2>&1; then
