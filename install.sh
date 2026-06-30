@@ -7,7 +7,9 @@ REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
-INSTALLER_VERSION="2026-06-30.4"
+CONTROL_BIN="/usr/local/bin/x"
+ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
+INSTALLER_VERSION="2026-06-30.7"
 
 die() {
   echo "ERROR: $*" >&2
@@ -46,6 +48,35 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 echo "Telegram Video Relay installer ${INSTALLER_VERSION}"
+
+case "${1:-}" in
+  uninstall)
+    step "Uninstalling service"
+    systemctl stop "${APP_NAME}" 2>/dev/null || true
+    systemctl disable "${APP_NAME}" 2>/dev/null || true
+    rm -f "${SERVICE_FILE}" "${CONTROL_BIN}" "${ALT_CONTROL_BIN}"
+    systemctl daemon-reload
+    systemctl reset-failed "${APP_NAME}" 2>/dev/null || true
+    echo "Uninstalled service. Kept app files: ${APP_DIR}"
+    exit 0
+    ;;
+  purge)
+    if [ "${2:-}" != "--yes" ]; then
+      echo "This will stop the bot and delete ${APP_DIR}."
+      read -r -p "Type DELETE to continue: " answer
+      [ "${answer}" = "DELETE" ] || { echo "Cancelled."; exit 1; }
+    fi
+    step "Purging install"
+    systemctl stop "${APP_NAME}" 2>/dev/null || true
+    systemctl disable "${APP_NAME}" 2>/dev/null || true
+    rm -f "${SERVICE_FILE}" "${CONTROL_BIN}" "${ALT_CONTROL_BIN}"
+    rm -rf "${APP_DIR}"
+    systemctl daemon-reload
+    systemctl reset-failed "${APP_NAME}" 2>/dev/null || true
+    echo "Purged ${APP_NAME}."
+    exit 0
+    ;;
+esac
 
 step "Installing system packages"
 if command -v apt >/dev/null 2>&1; then
@@ -158,6 +189,14 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF_SERVICE
 
+step "Installing control command"
+if [ -f "${APP_DIR}/control.sh" ]; then
+  install -m 755 "${APP_DIR}/control.sh" "${CONTROL_BIN}"
+  install -m 755 "${APP_DIR}/control.sh" "${ALT_CONTROL_BIN}"
+else
+  echo "WARNING: control.sh not found; skipping ${CONTROL_BIN}"
+fi
+
 step "Starting service"
 systemctl daemon-reload
 systemctl enable --now "${APP_NAME}"
@@ -165,6 +204,10 @@ systemctl enable --now "${APP_NAME}"
 echo
 echo "Installed successfully."
 echo "App dir: ${APP_DIR}"
-echo "Status:  systemctl status ${APP_NAME}"
-echo "Logs:    journalctl -u ${APP_NAME} -f"
+echo "Menu:    x"
+echo "Status:  x status"
+echo "Logs:    x logs"
+echo "Stop:    x stop"
+echo "Start:   x start"
+echo "Remove:  x uninstall"
 echo "Update:  bash <(curl -fsSL https://raw.githubusercontent.com/kingsnakerrr/tg-video-relay-bot/main/install.sh)"

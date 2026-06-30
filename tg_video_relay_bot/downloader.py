@@ -42,6 +42,16 @@ def download_video(url: str, settings: Settings) -> tuple[Path, str]:
         "no_warnings": True,
         "max_filesize": settings.max_file_bytes,
         "concurrent_fragment_downloads": 4,
+        "fragment_retries": 10,
+        "retries": 5,
+        "http_headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/126.0.0.0 Safari/537.36"
+            ),
+            "Referer": "https://x.com/",
+        },
     }
     if settings.cookies_file:
         options["cookiefile"] = str(settings.cookies_file)

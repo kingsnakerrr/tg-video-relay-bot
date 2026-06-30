@@ -37,10 +37,16 @@ bash <(curl -fsSL https://raw.githubusercontent.com/kingsnakerrr/tg-video-relay-
 - 目标频道/群组 ID，多个用英文逗号隔开
 - 管理员 Telegram 用户 ID，多个用英文逗号隔开
 
-安装完成后看日志：
+安装完成后直接输入：
 
 ```bash
-journalctl -u telegram-video-relay -f
+x
+```
+
+会出现控制菜单。看日志也可以用：
+
+```bash
+x logs
 ```
 
 ### 手动安装

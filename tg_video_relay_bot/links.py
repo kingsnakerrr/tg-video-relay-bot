@@ -13,7 +13,23 @@ SUPPORTED_HOST_HINTS = (
     "iesdouyin.com",
     "x.com",
     "twitter.com",
+    "video.twimg.com",
 )
+
+DIRECT_MEDIA_EXTENSIONS = (
+    ".m3u8",
+    ".mp4",
+    ".mov",
+    ".webm",
+)
+
+
+def _is_supported_url(url: str) -> bool:
+    lowered = url.lower()
+    path_without_query = lowered.split("?", 1)[0]
+    return any(host in lowered for host in SUPPORTED_HOST_HINTS) or path_without_query.endswith(
+        DIRECT_MEDIA_EXTENSIONS
+    )
 
 
 def extract_urls(text: str) -> list[str]:
@@ -21,8 +37,7 @@ def extract_urls(text: str) -> list[str]:
     urls: list[str] = []
     for match in URL_RE.findall(text or ""):
         url = match.rstrip(".,;!?)]}")
-        lowered = url.lower()
-        if any(host in lowered for host in SUPPORTED_HOST_HINTS) and url not in seen:
+        if _is_supported_url(url) and url not in seen:
             seen.add(url)
             urls.append(url)
     return urls
