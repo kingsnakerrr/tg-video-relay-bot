@@ -69,6 +69,9 @@ class Settings:
     download_format: str
     merge_output_format: str
     max_file_mb: int
+    max_upload_mb: int
+    auto_compress: bool
+    compress_audio_kbps: int
     cookies_file: Path | None
     upload_mode: str
     delete_after_all_uploads: bool
@@ -80,6 +83,10 @@ class Settings:
     @property
     def max_file_bytes(self) -> int:
         return self.max_file_mb * 1024 * 1024
+
+    @property
+    def max_upload_bytes(self) -> int:
+        return self.max_upload_mb * 1024 * 1024
 
 
 def load_settings() -> Settings:
@@ -108,6 +115,9 @@ def load_settings() -> Settings:
         download_format=os.getenv("DOWNLOAD_FORMAT", "bv*+ba/best"),
         merge_output_format=os.getenv("MERGE_OUTPUT_FORMAT", "mp4"),
         max_file_mb=_env_int("MAX_FILE_MB", 1900),
+        max_upload_mb=_env_int("MAX_UPLOAD_MB", 49),
+        auto_compress=_env_bool("AUTO_COMPRESS", True),
+        compress_audio_kbps=_env_int("COMPRESS_AUDIO_KBPS", 96),
         cookies_file=cookies_file,
         upload_mode=upload_mode,
         delete_after_all_uploads=_env_bool("DELETE_AFTER_ALL_UPLOADS", True),

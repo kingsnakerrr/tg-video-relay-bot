@@ -7,7 +7,7 @@ REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
-INSTALLER_VERSION="2026-06-30.3"
+INSTALLER_VERSION="2026-06-30.4"
 
 die() {
   echo "ERROR: $*" >&2
@@ -119,6 +119,9 @@ DOWNLOAD_DIR=downloads
 DOWNLOAD_FORMAT=bv*+ba/best
 MERGE_OUTPUT_FORMAT=mp4
 MAX_FILE_MB=1900
+MAX_UPLOAD_MB=49
+AUTO_COMPRESS=true
+COMPRESS_AUDIO_KBPS=96
 COOKIES_FILE=
 UPLOAD_MODE=video
 DELETE_AFTER_ALL_UPLOADS=true
@@ -130,6 +133,10 @@ EOF_ENV
 else
   step "Existing .env found, keeping it"
 fi
+
+grep -q '^MAX_UPLOAD_MB=' .env || printf '\nMAX_UPLOAD_MB=49\n' >> .env
+grep -q '^AUTO_COMPRESS=' .env || printf 'AUTO_COMPRESS=true\n' >> .env
+grep -q '^COMPRESS_AUDIO_KBPS=' .env || printf 'COMPRESS_AUDIO_KBPS=96\n' >> .env
 
 step "Writing systemd service"
 cat > "${SERVICE_FILE}" <<EOF_SERVICE

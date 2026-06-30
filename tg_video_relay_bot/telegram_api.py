@@ -30,6 +30,11 @@ class TelegramApi:
             files=files,
             timeout=timeout or self.timeout,
         )
+        if response.status_code == 413:
+            raise TelegramApiError(
+                f"{method} failed: file is too large for Telegram Bot API. "
+                "Set MAX_UPLOAD_MB=49 and AUTO_COMPRESS=true, then restart the service."
+            )
         try:
             payload = response.json()
         except ValueError as exc:

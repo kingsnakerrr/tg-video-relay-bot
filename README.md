@@ -131,3 +131,4 @@ COOKIES_FILE=/opt/tg-video-relay-bot/cookies.txt
 - 视频太大：调小 `MAX_FILE_MB`，或把 `DOWNLOAD_FORMAT` 改成较低清晰度，比如 `best[height<=720]/best`。
 - Telegram 不识别视频：把 `UPLOAD_MODE=document`，会作为文件发送。
 - YouTube/TikTok/X/Douyin 下载失败：升级 `yt-dlp`：`pip install -U yt-dlp`。
+- `Request Entity Too Large`：视频超过公共 Telegram Bot API 上传限制。默认 `MAX_UPLOAD_MB=49` 且 `AUTO_COMPRESS=true` 会自动压缩后再上传。改完 `.env` 后执行 `systemctl restart telegram-video-relay`。

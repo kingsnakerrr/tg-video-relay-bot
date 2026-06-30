@@ -7,6 +7,7 @@ from threading import Thread
 from typing import Any
 
 from .config import Settings
+from .compressor import prepare_upload_file
 from .downloader import cleanup_download, download_video
 from .links import trim_caption
 from .telegram_api import TelegramApi
@@ -62,11 +63,15 @@ class JobQueue:
             size_mb = file_path.stat().st_size / 1024 / 1024
             self._reply(job, f"下载完成：{title}\n大小：{size_mb:.1f} MB\n开始上传到 {len(self.settings.target_chat_ids)} 个目标。")
 
+            upload_path, note = prepare_upload_file(file_path, self.settings)
+            if note:
+                self._reply(job, note)
+
             failures: list[str] = []
             caption = trim_caption(f"{title}\n{job.url}")
             for target_chat_id in self.settings.target_chat_ids:
                 try:
-                    self._upload_one(target_chat_id, file_path, caption)
+                    self._upload_one(target_chat_id, upload_path, caption)
                 except Exception as exc:
                     failures.append(f"{target_chat_id}: {exc}")
 
