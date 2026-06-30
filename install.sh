@@ -20,7 +20,15 @@ step() {
 
 has_project_files() {
   local dir="$1"
-  [[ -f "${dir}/requirements.txt" && -d "${dir}/tg_video_relay_bot" ]]
+  [ -f "${dir}/requirements.txt" ] && [ -d "${dir}/tg_video_relay_bot" ]
+}
+
+dir_is_not_empty() {
+  local dir="$1"
+  local first_entry=""
+  [ -d "${dir}" ] || return 1
+  first_entry="$(find "${dir}" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null || true)"
+  [ -n "${first_entry}" ]
 }
 
 ask_required() {
@@ -32,7 +40,7 @@ ask_required() {
   printf '%s' "${value}"
 }
 
-if [[ "$(id -u)" -ne 0 ]]; then
+if [ "$(id -u)" -ne 0 ]; then
   die "Please run as root, for example: sudo bash install.sh"
 fi
 
@@ -47,16 +55,16 @@ fi
 
 SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
 SCRIPT_DIR=""
-if [[ -n "${SCRIPT_SOURCE}" && -f "${SCRIPT_SOURCE}" ]]; then
+if [ -n "${SCRIPT_SOURCE}" ] && [ -f "${SCRIPT_SOURCE}" ]; then
   SCRIPT_DIR="$(cd "$(dirname "${SCRIPT_SOURCE}")" && pwd)"
 fi
 
 step "Preparing app directory: ${APP_DIR}"
 mkdir -p "$(dirname "${APP_DIR}")"
 
-if [[ -n "${SCRIPT_DIR}" && has_project_files "${SCRIPT_DIR}" ]]; then
+if [ -n "${SCRIPT_DIR}" ] && has_project_files "${SCRIPT_DIR}"; then
   mkdir -p "${APP_DIR}"
-  if [[ "${SCRIPT_DIR}" != "${APP_DIR}" ]]; then
+  if [ "${SCRIPT_DIR}" != "${APP_DIR}" ]; then
     step "Copying local project files"
     tar \
       --exclude='./.env' \
@@ -65,12 +73,12 @@ if [[ -n "${SCRIPT_DIR}" && has_project_files "${SCRIPT_DIR}" ]]; then
       --exclude='./__pycache__' \
       -C "${SCRIPT_DIR}" -cf - . | tar -C "${APP_DIR}" -xf -
   fi
-elif [[ -d "${APP_DIR}/.git" ]]; then
+elif [ -d "${APP_DIR}/.git" ]; then
   step "Updating existing GitHub checkout"
   git -C "${APP_DIR}" fetch origin "${BRANCH}"
   git -C "${APP_DIR}" checkout "${BRANCH}"
   git -C "${APP_DIR}" pull --ff-only origin "${BRANCH}"
-elif [[ -d "${APP_DIR}" && -n "$(ls -A "${APP_DIR}" 2>/dev/null || true)" ]]; then
+elif dir_is_not_empty "${APP_DIR}"; then
   if has_project_files "${APP_DIR}"; then
     step "Using existing project files"
   else
@@ -90,7 +98,7 @@ step "Creating Python virtual environment"
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
-if [[ ! -f .env ]]; then
+if [ ! -f .env ]; then
   step "Creating .env"
   BOT_TOKEN="$(ask_required "Telegram Bot Token")"
   TARGET_CHAT_IDS="$(ask_required "Target channel/group IDs, comma separated")"
