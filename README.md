@@ -1,1 +1,133 @@
-# tg-video-relay-bot
+# Telegram Video Relay Bot
+
+把 X/Twitter、TikTok、抖音、YouTube 等公开视频链接转发给 Telegram 机器人，机器人会在 VPS 上下载视频，然后发送到配置好的多个频道或群组。所有目标发送成功后，本地视频会自动删除。
+
+请只下载和转发你拥有权利或已获授权的视频，并遵守平台条款。这个项目不绕过 DRM、付费墙或私密内容访问限制。
+
+## 功能
+
+- 支持 Telegram 私聊/群聊里发送链接触发任务
+- 支持多个目标频道/群组
+- 支持 `@channelusername` 和 `-100...` chat id
+- 下载完成后可作为视频或文件发送
+- 所有目标上传成功后自动删除本地文件
+- `/id` 查看当前用户和聊天 ID
+- `/targets` 查看当前转发目标数量
+- `/status` 查看队列状态
+
+## VPS 安装
+
+### 一键安装
+
+如果你把项目上传到 GitHub 仓库：
+
+```text
+https://github.com/kingsnakerrr/tg-video-relay-bot
+```
+
+VPS 上可以直接运行：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/kingsnakerrr/tg-video-relay-bot/main/install.sh)
+```
+
+安装脚本会提示你输入：
+
+- Telegram Bot Token
+- 目标频道/群组 ID，多个用英文逗号隔开
+- 管理员 Telegram 用户 ID，多个用英文逗号隔开
+
+安装完成后看日志：
+
+```bash
+journalctl -u telegram-video-relay -f
+```
+
+### 手动安装
+
+Ubuntu/Debian 示例：
+
+```bash
+sudo apt update
+sudo apt install -y python3 python3-venv ffmpeg
+cd /opt
+sudo git clone <your-repo-or-uploaded-folder> tg-video-relay-bot
+cd /opt/tg-video-relay-bot
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+nano .env
+```
+
+至少填写：
+
+```env
+BOT_TOKEN=你的机器人Token
+TARGET_CHAT_IDS=-1001234567890,@your_channel_username
+ALLOWED_USER_IDS=你的Telegram数字用户ID
+```
+
+然后运行：
+
+```bash
+. .venv/bin/activate
+python -m tg_video_relay_bot
+```
+
+## Telegram 配置
+
+1. 用 `@BotFather` 创建机器人并拿到 `BOT_TOKEN`。
+2. 把机器人加入要发布的频道或群组。
+3. 频道里要把机器人设为管理员，并允许发消息/发视频。
+4. 给机器人发送 `/id`，把返回的用户 ID 填进 `ALLOWED_USER_IDS`。
+5. 群组/频道的数字 ID 通常是 `-100...`。你也可以对公开频道使用 `@channelusername`。
+
+## systemd 常驻运行
+
+复制服务文件：
+
+```bash
+sudo cp deploy/telegram-video-relay.service /etc/systemd/system/telegram-video-relay.service
+sudo nano /etc/systemd/system/telegram-video-relay.service
+```
+
+按你的 VPS 用户和目录调整：
+
+```ini
+User=ubuntu
+WorkingDirectory=/opt/tg-video-relay-bot
+EnvironmentFile=/opt/tg-video-relay-bot/.env
+ExecStart=/opt/tg-video-relay-bot/.venv/bin/python -m tg_video_relay_bot
+```
+
+启动：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now telegram-video-relay
+sudo systemctl status telegram-video-relay
+```
+
+查看日志：
+
+```bash
+journalctl -u telegram-video-relay -f
+```
+
+## Cookie 登录
+
+部分平台或年龄限制视频可能需要 cookie。你可以在浏览器导出 Netscape 格式 cookie 文件，然后在 `.env` 里设置：
+
+```env
+COOKIES_FILE=/opt/tg-video-relay-bot/cookies.txt
+```
+
+不要把 cookie 文件提交到公开仓库。
+
+## 常见问题
+
+- 上传失败：确认机器人在目标频道/群组里有发消息权限。
+- 视频太大：调小 `MAX_FILE_MB`，或把 `DOWNLOAD_FORMAT` 改成较低清晰度，比如 `best[height<=720]/best`。
+- Telegram 不识别视频：把 `UPLOAD_MODE=document`，会作为文件发送。
+- YouTube/TikTok/X/Douyin 下载失败：升级 `yt-dlp`：`pip install -U yt-dlp`。
