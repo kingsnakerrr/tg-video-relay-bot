@@ -147,6 +147,7 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
 
             positions: list[int] = []
             for url in urls:
+                logging.info("submit-api queued url: %s", url)
                 positions.append(
                     job_queue.enqueue(
                         VideoJob(
@@ -165,6 +166,7 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
                     "ok": True,
                     "queued": len(urls),
                     "positions": positions,
+                    "urls": urls,
                 },
             )
 

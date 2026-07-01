@@ -78,6 +78,7 @@ VPS 收到后会加入队列，下载并上传到 `.env` 里的 `TARGET_CHAT_IDS
 
 ```bash
 x shortcut
+x test-submit "https://x.com/example/status/123"
 ```
 
 复制它显示的 `Local test` 命令执行。如果返回：

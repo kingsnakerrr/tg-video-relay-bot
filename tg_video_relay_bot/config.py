@@ -126,10 +126,15 @@ def load_settings() -> Settings:
     cookies_value = os.getenv("COOKIES_FILE", "").strip()
     cookies_file = Path(cookies_value).expanduser() if cookies_value else None
 
+    allowed_user_ids = _parse_user_ids(os.getenv("ALLOWED_USER_IDS", ""))
+    submit_notify_chat_id = _parse_optional_chat_id(os.getenv("SUBMIT_NOTIFY_CHAT_ID", ""))
+    if submit_notify_chat_id is None and len(allowed_user_ids) == 1:
+        submit_notify_chat_id = next(iter(allowed_user_ids))
+
     return Settings(
         bot_token=bot_token,
         target_chat_ids=target_chat_ids,
-        allowed_user_ids=_parse_user_ids(os.getenv("ALLOWED_USER_IDS", "")),
+        allowed_user_ids=allowed_user_ids,
         download_dir=Path(os.getenv("DOWNLOAD_DIR", "downloads")).expanduser(),
         download_format=os.getenv("DOWNLOAD_FORMAT", "bv*+ba/best"),
         merge_output_format=os.getenv("MERGE_OUTPUT_FORMAT", "mp4"),
@@ -144,7 +149,7 @@ def load_settings() -> Settings:
         submit_api_host=os.getenv("SUBMIT_API_HOST", "0.0.0.0").strip() or "0.0.0.0",
         submit_api_port=_env_int("SUBMIT_API_PORT", 8787),
         submit_api_secret=os.getenv("SUBMIT_API_SECRET", "").strip(),
-        submit_notify_chat_id=_parse_optional_chat_id(os.getenv("SUBMIT_NOTIFY_CHAT_ID", "")),
+        submit_notify_chat_id=submit_notify_chat_id,
         upload_mode=upload_mode,
         delete_after_all_uploads=_env_bool("DELETE_AFTER_ALL_UPLOADS", True),
         bot_api_timeout=_env_int("BOT_API_TIMEOUT", 30),

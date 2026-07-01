@@ -29,6 +29,7 @@ Usage:
   x status             Show service status
   x logs               Follow live logs
   x doctor             Diagnose service and submit API
+  x test-submit URL    Submit one URL from the VPS itself
   x cookies            Sync cookies.txt now
   x shortcut           Show iPhone Shortcut submit settings
   x env                Edit .env config
@@ -50,13 +51,14 @@ Telegram Video Relay
 4) Status
 5) Doctor
 6) Logs
-7) Sync cookies
-8) iPhone Shortcut settings
-9) Edit config
-10) Update
-11) Reinstall
-12) Uninstall service, keep files
-13) Purge everything
+7) Test submit URL
+8) Sync cookies
+9) iPhone Shortcut settings
+10) Edit config
+11) Update
+12) Reinstall
+13) Uninstall service, keep files
+14) Purge everything
 0) Exit
 EOF
   echo
@@ -68,13 +70,14 @@ EOF
     4) run status ;;
     5) run doctor ;;
     6) run logs ;;
-    7) run cookies ;;
-    8) run shortcut ;;
-    9) run env ;;
-    10) run update ;;
-    11) run reinstall ;;
-    12) run uninstall ;;
-    13) run purge ;;
+    7) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
+    8) run cookies ;;
+    9) run shortcut ;;
+    10) run env ;;
+    11) run update ;;
+    12) run reinstall ;;
+    13) run uninstall ;;
+    14) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice."; exit 1 ;;
   esac
@@ -185,6 +188,23 @@ run() {
       ;;
     logs|log)
       journalctl -u "${APP_NAME}" -f
+      ;;
+    test-submit|test)
+      need_root
+      ensure_submit_env
+      port="$(env_value SUBMIT_API_PORT)"
+      secret="$(env_value SUBMIT_API_SECRET)"
+      url="${2:-}"
+      [ -n "${port}" ] || port="8787"
+      if [ -z "${url}" ]; then
+        echo "Usage: x test-submit 'https://x.com/.../status/...'"
+        exit 1
+      fi
+      curl -fsS -G "http://127.0.0.1:${port}/submit" \
+        --data-urlencode "secret=${secret}" \
+        --data-urlencode "url=${url}"
+      echo
+      echo "Queued. Watch logs with: x logs"
       ;;
     cookies|cookie|sync-cookies)
       need_root
