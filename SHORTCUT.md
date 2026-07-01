@@ -7,6 +7,7 @@
 确认服务是新版：
 
 ```bash
+x doctor
 x shortcut
 ```
 
@@ -48,11 +49,14 @@ URL: http://你的VPS_IP:8787/submit
 表单字段：
 
 ```text
-secret = x shortcut 里显示的密钥
-url = 快捷指令输入
+键 secret，值填 x shortcut 里显示的密钥
+键 url，值选择“快捷指令输入”或第一步拿到的 URL 变量
 ```
 
-可选：最后加一个「显示通知」动作，内容写：
+不要把整串 `secret=密钥` 填到“键”里；键只写 `secret`。  
+不要把 `url=Shortcut Input URL` 当普通文字填进去；值要点变量按钮插入 URL 变量。
+
+提交动作后面不要再接「共享」或「获取 URL 的内容 类型」。可选：最后加一个「显示通知」动作，内容写：
 
 ```text
 已提交给 VPS

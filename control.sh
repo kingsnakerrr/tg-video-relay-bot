@@ -28,6 +28,7 @@ Usage:
   x restart            Restart the bot
   x status             Show service status
   x logs               Follow live logs
+  x doctor             Diagnose service and submit API
   x cookies            Sync cookies.txt now
   x shortcut           Show iPhone Shortcut submit settings
   x env                Edit .env config
@@ -47,14 +48,15 @@ Telegram Video Relay
 2) Stop / Pause
 3) Restart
 4) Status
-5) Logs
-6) Sync cookies
-7) iPhone Shortcut settings
-8) Edit config
-9) Update
-10) Reinstall
-11) Uninstall service, keep files
-12) Purge everything
+5) Doctor
+6) Logs
+7) Sync cookies
+8) iPhone Shortcut settings
+9) Edit config
+10) Update
+11) Reinstall
+12) Uninstall service, keep files
+13) Purge everything
 0) Exit
 EOF
   echo
@@ -64,14 +66,15 @@ EOF
     2) run stop ;;
     3) run restart ;;
     4) run status ;;
-    5) run logs ;;
-    6) run cookies ;;
-    7) run shortcut ;;
-    8) run env ;;
-    9) run update ;;
-    10) run reinstall ;;
-    11) run uninstall ;;
-    12) run purge ;;
+    5) run doctor ;;
+    6) run logs ;;
+    7) run cookies ;;
+    8) run shortcut ;;
+    9) run env ;;
+    10) run update ;;
+    11) run reinstall ;;
+    12) run uninstall ;;
+    13) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice."; exit 1 ;;
   esac
@@ -144,6 +147,41 @@ run() {
       ;;
     status)
       systemctl status "${APP_NAME}" --no-pager
+      ;;
+    doctor)
+      need_root
+      ensure_submit_env
+      port="$(env_value SUBMIT_API_PORT)"
+      enabled="$(env_value SUBMIT_API_ENABLED)"
+      secret="$(env_value SUBMIT_API_SECRET)"
+      [ -n "${port}" ] || port="8787"
+      echo "== Version =="
+      grep 'INSTALLER_VERSION=' "${APP_DIR}/install.sh" 2>/dev/null || echo "install.sh not found"
+      echo
+      echo "== Submit API .env =="
+      printf 'SUBMIT_API_ENABLED=%s\n' "${enabled:-}"
+      printf 'SUBMIT_API_PORT=%s\n' "${port}"
+      if [ -n "${secret}" ]; then
+        echo "SUBMIT_API_SECRET=set"
+      else
+        echo "SUBMIT_API_SECRET=missing"
+      fi
+      echo
+      echo "== Service =="
+      systemctl is-active "${APP_NAME}" || true
+      systemctl status "${APP_NAME}" --no-pager -n 5 || true
+      echo
+      echo "== Listening port =="
+      ss -lntp 2>/dev/null | grep ":${port} " || echo "Not listening on ${port}"
+      echo
+      echo "== Local health =="
+      curl -fsS "http://127.0.0.1:${port}/health" || echo "Health check failed"
+      echo
+      echo
+      echo "If the port is not listening, run:"
+      echo "  x update"
+      echo "  x restart"
+      echo "  x logs"
       ;;
     logs|log)
       journalctl -u "${APP_NAME}" -f

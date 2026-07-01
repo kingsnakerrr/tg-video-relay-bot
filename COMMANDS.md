@@ -16,6 +16,7 @@ x stop        # 暂停/停止
 x pause       # 暂停/停止
 x restart     # 重启
 x status      # 查看状态
+x doctor      # 诊断服务和 8787 接口
 x logs        # 实时日志
 x cookies     # 立即同步 cookies.txt
 x shortcut    # 查看 iPhone 快捷指令配置
@@ -90,8 +91,8 @@ x shortcut
 获取 URL 内容
 方法：POST
 请求体：表单
-secret = x shortcut 显示的密钥
-url = 快捷指令输入
+键 secret，值 = x shortcut 显示的密钥
+键 url，值 = 快捷指令输入 URL 变量
 ```
 
 详细步骤见 `SHORTCUT.md`。

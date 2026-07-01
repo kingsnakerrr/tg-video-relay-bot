@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import cgi
+import io
 import json
 import logging
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -24,6 +26,7 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[s
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Connection", "close")
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -31,6 +34,42 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[s
 def _first(values: dict[str, list[str]], key: str) -> str:
     items = values.get(key, [])
     return items[0] if items else ""
+
+
+def _normalize_values(values: dict[str, list[str]]) -> dict[str, list[str]]:
+    normalized = dict(values)
+    for key, items in values.items():
+        if "=" not in key:
+            continue
+        name, embedded_value = key.split("=", 1)
+        if name in {"secret", "token", "url", "text", "input"} and embedded_value:
+            normalized.setdefault(name, []).append(embedded_value)
+        if items:
+            normalized.setdefault(name, []).extend(items)
+    return normalized
+
+
+def _parse_multipart(handler: BaseHTTPRequestHandler, raw_body: bytes, content_type: str, length: int) -> dict[str, list[str]]:
+    environ = {
+        "REQUEST_METHOD": "POST",
+        "CONTENT_TYPE": content_type,
+        "CONTENT_LENGTH": str(length),
+    }
+    form = cgi.FieldStorage(
+        fp=io.BytesIO(raw_body),
+        headers=handler.headers,
+        environ=environ,
+        keep_blank_values=True,
+    )
+    values: dict[str, list[str]] = {}
+    for key in form.keys():
+        field = form[key]
+        fields = field if isinstance(field, list) else [field]
+        for item in fields:
+            if item.filename:
+                continue
+            values.setdefault(key, []).append(str(item.value))
+    return values
 
 
 def _parse_body(handler: BaseHTTPRequestHandler) -> dict[str, list[str]]:
@@ -44,8 +83,10 @@ def _parse_body(handler: BaseHTTPRequestHandler) -> dict[str, list[str]]:
     content_type = handler.headers.get("Content-Type", "")
     if "application/json" in content_type:
         payload = json.loads(raw_body.decode("utf-8"))
-        return {key: [str(value)] for key, value in payload.items()}
-    return parse_qs(raw_body.decode("utf-8"), keep_blank_values=True)
+        return _normalize_values({key: [str(value)] for key, value in payload.items()})
+    if "multipart/form-data" in content_type:
+        return _normalize_values(_parse_multipart(handler, raw_body, content_type, length))
+    return _normalize_values(parse_qs(raw_body.decode("utf-8"), keep_blank_values=True))
 
 
 def _authorized(handler: BaseHTTPRequestHandler, values: dict[str, list[str]], settings: Settings) -> bool:
@@ -76,7 +117,7 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
                 return
 
             values = parse_qs(parsed.query, keep_blank_values=True)
-            self._submit(values)
+            self._submit(_normalize_values(values))
 
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
@@ -87,7 +128,7 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
                 values = parse_qs(parsed.query, keep_blank_values=True)
                 body_values = _parse_body(self)
                 values.update(body_values)
-                self._submit(values)
+                self._submit(_normalize_values(values))
             except json.JSONDecodeError:
                 _json_response(self, 400, {"ok": False, "error": "invalid_json"})
             except SubmitServerError as exc:
