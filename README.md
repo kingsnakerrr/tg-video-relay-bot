@@ -89,6 +89,16 @@ python -m tg_video_relay_bot
 4. 给机器人发送 `/id`，把返回的用户 ID 填进 `ALLOWED_USER_IDS`。
 5. 群组/频道的数字 ID 通常是 `-100...`。你也可以对公开频道使用 `@channelusername`。
 
+## iPhone 快捷指令入口
+
+本项目内置私密 HTTP 提交入口，给 iPhone 快捷指令使用。安装后执行：
+
+```bash
+x shortcut
+```
+
+它会显示快捷指令需要填的 URL 和 `secret`。详细步骤见 `SHORTCUT.md`。
+
 ## systemd 常驻运行
 
 复制服务文件：
@@ -153,6 +163,20 @@ COOKIE_SYNC_INTERVAL_MINUTES=360
 x cookies
 x restart
 ```
+
+检查链接是不是直链：
+
+```bash
+curl -L "你的COOKIE_SYNC_URL" | head
+```
+
+正确内容通常会看到：
+
+```text
+# Netscape HTTP Cookie File
+```
+
+如果看到 `<html`、登录页、OneDrive 预览页，就不是直链。OpenList 建议使用文件的直接下载地址；OneDrive 分享页通常不是直链。
 
 不要把 cookie 文件提交到公开仓库，也不要使用任何人都能访问的公开直链。
 

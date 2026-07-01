@@ -7,6 +7,7 @@ from typing import Any
 from .config import Settings, load_settings
 from .jobs import JobQueue, VideoJob
 from .links import extract_urls
+from .submit_server import SubmitServerError, start_submit_server
 from .telegram_api import TelegramApi, TelegramApiError
 
 
@@ -130,6 +131,14 @@ def run_bot(settings: Settings) -> None:
     api = TelegramApi(settings.bot_token, settings.bot_api_timeout, settings.upload_timeout)
     job_queue = JobQueue(api, settings)
     job_queue.start()
+
+    if settings.submit_api_enabled:
+        try:
+            start_submit_server(settings, job_queue)
+        except SubmitServerError as exc:
+            logging.warning("Submit API disabled: %s", exc)
+        except OSError as exc:
+            logging.warning("Submit API failed to start: %s", exc)
 
     logging.info("Bot started with %s target chats", len(settings.target_chat_ids))
     offset: int | None = None

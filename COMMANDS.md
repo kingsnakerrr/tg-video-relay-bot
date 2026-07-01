@@ -18,6 +18,7 @@ x restart     # 重启
 x status      # 查看状态
 x logs        # 实时日志
 x cookies     # 立即同步 cookies.txt
+x shortcut    # 查看 iPhone 快捷指令配置
 x env         # 修改 .env 配置
 x update      # 更新代码并重启
 x reinstall   # 重新执行安装
@@ -59,6 +60,41 @@ x restart
 ```
 
 `COOKIE_SYNC_URL` 必须是直接下载 cookies.txt 的私密链接，不要用公开链接。
+
+检查链接是不是直链：
+
+```bash
+curl -L "你的COOKIE_SYNC_URL" | head
+```
+
+正确内容通常会看到：
+
+```text
+# Netscape HTTP Cookie File
+```
+
+如果看到 `<html`、登录页、OneDrive 预览页，就不是直链。OpenList 建议使用文件的直接下载地址；OneDrive 分享页通常不是直链。
+
+## iPhone 快捷指令
+
+查看快捷指令需要填的地址和密钥：
+
+```bash
+x shortcut
+```
+
+快捷指令里使用：
+
+```text
+获取输入中的 URL
+获取 URL 内容
+方法：POST
+请求体：表单
+secret = x shortcut 显示的密钥
+url = 快捷指令输入
+```
+
+详细步骤见 `SHORTCUT.md`。
 
 ## 删除后重装
 

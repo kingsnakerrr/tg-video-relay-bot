@@ -16,7 +16,7 @@ def load_dotenv(path: Path) -> None:
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        os.environ.setdefault(key, value)
+        os.environ[key] = value
 
 
 def _split_csv(value: str) -> list[str]:
@@ -34,6 +34,18 @@ def _parse_chat_ids(value: str) -> list[int | str]:
         except ValueError as exc:
             raise ValueError(f"Invalid TARGET_CHAT_IDS entry: {item}") from exc
     return chats
+
+
+def _parse_optional_chat_id(value: str) -> int | str | None:
+    item = value.strip()
+    if not item:
+        return None
+    if item.startswith("@"):
+        return item
+    try:
+        return int(item)
+    except ValueError as exc:
+        raise ValueError(f"Invalid chat ID: {item}") from exc
 
 
 def _parse_user_ids(value: str) -> set[int]:
@@ -75,6 +87,11 @@ class Settings:
     cookies_file: Path | None
     cookie_sync_url: str
     cookie_sync_interval_minutes: int
+    submit_api_enabled: bool
+    submit_api_host: str
+    submit_api_port: int
+    submit_api_secret: str
+    submit_notify_chat_id: int | str | None
     upload_mode: str
     delete_after_all_uploads: bool
     bot_api_timeout: int
@@ -123,6 +140,11 @@ def load_settings() -> Settings:
         cookies_file=cookies_file,
         cookie_sync_url=os.getenv("COOKIE_SYNC_URL", "").strip(),
         cookie_sync_interval_minutes=max(1, _env_int("COOKIE_SYNC_INTERVAL_MINUTES", 360)),
+        submit_api_enabled=_env_bool("SUBMIT_API_ENABLED", True),
+        submit_api_host=os.getenv("SUBMIT_API_HOST", "0.0.0.0").strip() or "0.0.0.0",
+        submit_api_port=_env_int("SUBMIT_API_PORT", 8787),
+        submit_api_secret=os.getenv("SUBMIT_API_SECRET", "").strip(),
+        submit_notify_chat_id=_parse_optional_chat_id(os.getenv("SUBMIT_NOTIFY_CHAT_ID", "")),
         upload_mode=upload_mode,
         delete_after_all_uploads=_env_bool("DELETE_AFTER_ALL_UPLOADS", True),
         bot_api_timeout=_env_int("BOT_API_TIMEOUT", 30),

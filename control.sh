@@ -29,6 +29,7 @@ Usage:
   x status             Show service status
   x logs               Follow live logs
   x cookies            Sync cookies.txt now
+  x shortcut           Show iPhone Shortcut submit settings
   x env                Edit .env config
   x update             Pull latest code and restart
   x reinstall          Run install.sh again
@@ -48,11 +49,12 @@ Telegram Video Relay
 4) Status
 5) Logs
 6) Sync cookies
-7) Edit config
-8) Update
-9) Reinstall
-10) Uninstall service, keep files
-11) Purge everything
+7) iPhone Shortcut settings
+8) Edit config
+9) Update
+10) Reinstall
+11) Uninstall service, keep files
+12) Purge everything
 0) Exit
 EOF
   echo
@@ -64,11 +66,12 @@ EOF
     4) run status ;;
     5) run logs ;;
     6) run cookies ;;
-    7) run env ;;
-    8) run update ;;
-    9) run reinstall ;;
-    10) run uninstall ;;
-    11) run purge ;;
+    7) run shortcut ;;
+    8) run env ;;
+    9) run update ;;
+    10) run reinstall ;;
+    11) run uninstall ;;
+    12) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice."; exit 1 ;;
   esac
@@ -83,6 +86,39 @@ remove_service() {
   rm -f "${SERVICE_FILE}"
   systemctl daemon-reload
   systemctl reset-failed "${APP_NAME}" 2>/dev/null || true
+}
+
+env_value() {
+  key="$1"
+  if [ ! -f "${APP_DIR}/.env" ]; then
+    return
+  fi
+  grep -E "^${key}=" "${APP_DIR}/.env" | tail -n 1 | cut -d= -f2-
+}
+
+generate_secret() {
+  if [ -x "${APP_DIR}/.venv/bin/python" ]; then
+    "${APP_DIR}/.venv/bin/python" -c 'import secrets; print(secrets.token_urlsafe(32))'
+  else
+    python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
+  fi
+}
+
+ensure_submit_env() {
+  env_file="${APP_DIR}/.env"
+  [ -f "${env_file}" ] || return
+  grep -q '^SUBMIT_API_ENABLED=' "${env_file}" || printf 'SUBMIT_API_ENABLED=true\n' >> "${env_file}"
+  grep -q '^SUBMIT_API_HOST=' "${env_file}" || printf 'SUBMIT_API_HOST=0.0.0.0\n' >> "${env_file}"
+  grep -q '^SUBMIT_API_PORT=' "${env_file}" || printf 'SUBMIT_API_PORT=8787\n' >> "${env_file}"
+  if ! grep -q '^SUBMIT_API_SECRET=' "${env_file}" || grep -q '^SUBMIT_API_SECRET=$' "${env_file}"; then
+    new_secret="$(generate_secret)"
+    if grep -q '^SUBMIT_API_SECRET=' "${env_file}"; then
+      sed -i "s|^SUBMIT_API_SECRET=.*|SUBMIT_API_SECRET=${new_secret}|" "${env_file}"
+    else
+      printf 'SUBMIT_API_SECRET=%s\n' "${new_secret}" >> "${env_file}"
+    fi
+  fi
+  grep -q '^SUBMIT_NOTIFY_CHAT_ID=' "${env_file}" || printf 'SUBMIT_NOTIFY_CHAT_ID=\n' >> "${env_file}"
 }
 
 run() {
@@ -117,6 +153,28 @@ run() {
       cd "${APP_DIR}"
       "${APP_DIR}/.venv/bin/python" -m tg_video_relay_bot.cookie_sync
       ;;
+    shortcut|submit)
+      need_root
+      ensure_submit_env
+      port="$(env_value SUBMIT_API_PORT)"
+      secret="$(env_value SUBMIT_API_SECRET)"
+      enabled="$(env_value SUBMIT_API_ENABLED)"
+      host_hint="$(hostname -I 2>/dev/null | awk '{print $1}')"
+      [ -n "${port}" ] || port="8787"
+      [ -n "${host_hint}" ] || host_hint="YOUR_VPS_IP_OR_DOMAIN"
+      echo "Submit API enabled: ${enabled:-unknown}"
+      echo "Shortcut URL:"
+      echo "  http://${host_hint}:${port}/submit"
+      echo
+      echo "Shortcut form fields:"
+      echo "  secret = ${secret}"
+      echo "  url    = Shortcut Input URL"
+      echo
+      echo "Local test:"
+      echo "  curl -G 'http://127.0.0.1:${port}/submit' --data-urlencode 'secret=${secret}' --data-urlencode 'url=https://x.com/example/status/123'"
+      echo
+      echo "For iPhone outside your VPS, open TCP port ${port} or use HTTPS reverse proxy."
+      ;;
     env|config)
       need_root
       "${EDITOR:-nano}" "${APP_DIR}/.env"
@@ -132,6 +190,7 @@ run() {
       git -C "${APP_DIR}" checkout "${BRANCH}"
       git -C "${APP_DIR}" pull --ff-only origin "${BRANCH}"
       "${APP_DIR}/.venv/bin/python" -m pip install -r "${APP_DIR}/requirements.txt"
+      ensure_submit_env
       if [ -f "${APP_DIR}/control.sh" ]; then
         install -m 755 "${APP_DIR}/control.sh" "${CONTROL_BIN}"
         install -m 755 "${APP_DIR}/control.sh" "${ALT_CONTROL_BIN}"

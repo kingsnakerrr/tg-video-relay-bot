@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from queue import Queue
@@ -15,7 +16,7 @@ from .telegram_api import TelegramApi
 
 @dataclass(frozen=True)
 class VideoJob:
-    source_chat_id: int | str
+    source_chat_id: int | str | None
     source_message_id: int | None
     source_user_id: int | None
     url: str
@@ -48,6 +49,9 @@ class JobQueue:
                 self.queue.task_done()
 
     def _reply(self, job: VideoJob, text: str) -> None:
+        if job.source_chat_id is None:
+            logging.info("%s", text)
+            return
         self.api.send_message(
             job.source_chat_id,
             text,

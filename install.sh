@@ -9,7 +9,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-01.1"
+INSTALLER_VERSION="2026-07-01.3"
 
 die() {
   echo "ERROR: $*" >&2
@@ -41,6 +41,10 @@ ask_required() {
     read -r -p "${prompt}: " value
   done
   printf '%s' "${value}"
+}
+
+generate_secret() {
+  python -c 'import secrets; print(secrets.token_urlsafe(32))'
 }
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -141,6 +145,7 @@ if [ ! -f .env ]; then
   BOT_TOKEN="$(ask_required "Telegram Bot Token")"
   TARGET_CHAT_IDS="$(ask_required "Target channel/group IDs, comma separated")"
   ALLOWED_USER_IDS="$(ask_required "Admin Telegram user IDs, comma separated")"
+  SUBMIT_API_SECRET="$(generate_secret)"
 
   cat > .env <<EOF_ENV
 BOT_TOKEN=${BOT_TOKEN}
@@ -162,6 +167,11 @@ BOT_API_TIMEOUT=30
 UPLOAD_TIMEOUT=1800
 POLL_TIMEOUT=50
 WORKER_COUNT=1
+SUBMIT_API_ENABLED=true
+SUBMIT_API_HOST=0.0.0.0
+SUBMIT_API_PORT=8787
+SUBMIT_API_SECRET=${SUBMIT_API_SECRET}
+SUBMIT_NOTIFY_CHAT_ID=
 EOF_ENV
 else
   step "Existing .env found, keeping it"
@@ -176,6 +186,18 @@ fi
 grep -q '^COOKIES_FILE=' .env || printf 'COOKIES_FILE=%s/cookies.txt\n' "${APP_DIR}" >> .env
 grep -q '^COOKIE_SYNC_URL=' .env || printf 'COOKIE_SYNC_URL=\n' >> .env
 grep -q '^COOKIE_SYNC_INTERVAL_MINUTES=' .env || printf 'COOKIE_SYNC_INTERVAL_MINUTES=360\n' >> .env
+grep -q '^SUBMIT_API_ENABLED=' .env || printf 'SUBMIT_API_ENABLED=true\n' >> .env
+grep -q '^SUBMIT_API_HOST=' .env || printf 'SUBMIT_API_HOST=0.0.0.0\n' >> .env
+grep -q '^SUBMIT_API_PORT=' .env || printf 'SUBMIT_API_PORT=8787\n' >> .env
+if ! grep -q '^SUBMIT_API_SECRET=' .env || grep -q '^SUBMIT_API_SECRET=$' .env; then
+  SUBMIT_API_SECRET="$(generate_secret)"
+  if grep -q '^SUBMIT_API_SECRET=' .env; then
+    sed -i "s|^SUBMIT_API_SECRET=.*|SUBMIT_API_SECRET=${SUBMIT_API_SECRET}|" .env
+  else
+    printf 'SUBMIT_API_SECRET=%s\n' "${SUBMIT_API_SECRET}" >> .env
+  fi
+fi
+grep -q '^SUBMIT_NOTIFY_CHAT_ID=' .env || printf 'SUBMIT_NOTIFY_CHAT_ID=\n' >> .env
 if [ -f "${APP_DIR}/cookies.txt" ]; then
   chmod 600 "${APP_DIR}/cookies.txt"
 fi
@@ -220,5 +242,6 @@ echo "Status:  x status"
 echo "Logs:    x logs"
 echo "Stop:    x stop"
 echo "Start:   x start"
+echo "Shortcut:x shortcut"
 echo "Remove:  x uninstall"
 echo "Update:  bash <(curl -fsSL https://raw.githubusercontent.com/kingsnakerrr/tg-video-relay-bot/main/install.sh)"

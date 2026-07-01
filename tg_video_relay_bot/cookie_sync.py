@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -113,8 +114,12 @@ def sync_cookies_if_needed(settings: Settings, *, force: bool = False) -> str | 
 
 
 def main() -> None:
-    settings = load_settings()
-    message = sync_cookies_if_needed(settings, force=True)
+    try:
+        settings = load_settings()
+        message = sync_cookies_if_needed(settings, force=True)
+    except CookieSyncError as exc:
+        print(f"Cookie sync failed: {exc}", file=sys.stderr)
+        sys.exit(1)
     print(message or "COOKIE_SYNC_URL is empty; nothing to sync.")
 
 
