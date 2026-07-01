@@ -9,7 +9,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-06-30.7"
+INSTALLER_VERSION="2026-07-01.1"
 
 die() {
   echo "ERROR: $*" >&2
@@ -153,7 +153,9 @@ MAX_FILE_MB=1900
 MAX_UPLOAD_MB=49
 AUTO_COMPRESS=true
 COMPRESS_AUDIO_KBPS=96
-COOKIES_FILE=
+COOKIES_FILE=${APP_DIR}/cookies.txt
+COOKIE_SYNC_URL=
+COOKIE_SYNC_INTERVAL_MINUTES=360
 UPLOAD_MODE=video
 DELETE_AFTER_ALL_UPLOADS=true
 BOT_API_TIMEOUT=30
@@ -168,6 +170,15 @@ fi
 grep -q '^MAX_UPLOAD_MB=' .env || printf '\nMAX_UPLOAD_MB=49\n' >> .env
 grep -q '^AUTO_COMPRESS=' .env || printf 'AUTO_COMPRESS=true\n' >> .env
 grep -q '^COMPRESS_AUDIO_KBPS=' .env || printf 'COMPRESS_AUDIO_KBPS=96\n' >> .env
+if grep -q '^COOKIES_FILE=$' .env; then
+  sed -i "s|^COOKIES_FILE=$|COOKIES_FILE=${APP_DIR}/cookies.txt|" .env
+fi
+grep -q '^COOKIES_FILE=' .env || printf 'COOKIES_FILE=%s/cookies.txt\n' "${APP_DIR}" >> .env
+grep -q '^COOKIE_SYNC_URL=' .env || printf 'COOKIE_SYNC_URL=\n' >> .env
+grep -q '^COOKIE_SYNC_INTERVAL_MINUTES=' .env || printf 'COOKIE_SYNC_INTERVAL_MINUTES=360\n' >> .env
+if [ -f "${APP_DIR}/cookies.txt" ]; then
+  chmod 600 "${APP_DIR}/cookies.txt"
+fi
 
 step "Writing systemd service"
 cat > "${SERVICE_FILE}" <<EOF_SERVICE

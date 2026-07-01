@@ -123,13 +123,38 @@ journalctl -u telegram-video-relay -f
 
 ## Cookie 登录
 
-部分平台或年龄限制视频可能需要 cookie。你可以在浏览器导出 Netscape 格式 cookie 文件，然后在 `.env` 里设置：
+部分平台或年龄限制视频可能需要 cookie。请使用 Netscape 格式的 `cookies.txt`。
+
+手动上传到 VPS：
+
+```bash
+cd /opt/tg-video-relay-bot
+chmod 600 cookies.txt
+x restart
+```
+
+`.env` 里保持：
 
 ```env
 COOKIES_FILE=/opt/tg-video-relay-bot/cookies.txt
 ```
 
-不要把 cookie 文件提交到公开仓库。
+也可以让 VPS 从你的 OneDrive/OpenList 私密直链自动同步：
+
+```env
+COOKIES_FILE=/opt/tg-video-relay-bot/cookies.txt
+COOKIE_SYNC_URL=https://你的私密直链/cookies.txt
+COOKIE_SYNC_INTERVAL_MINUTES=360
+```
+
+保存后执行：
+
+```bash
+x cookies
+x restart
+```
+
+不要把 cookie 文件提交到公开仓库，也不要使用任何人都能访问的公开直链。
 
 ## 常见问题
 

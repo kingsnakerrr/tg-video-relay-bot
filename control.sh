@@ -28,6 +28,7 @@ Usage:
   x restart            Restart the bot
   x status             Show service status
   x logs               Follow live logs
+  x cookies            Sync cookies.txt now
   x env                Edit .env config
   x update             Pull latest code and restart
   x reinstall          Run install.sh again
@@ -46,11 +47,12 @@ Telegram Video Relay
 3) Restart
 4) Status
 5) Logs
-6) Edit config
-7) Update
-8) Reinstall
-9) Uninstall service, keep files
-10) Purge everything
+6) Sync cookies
+7) Edit config
+8) Update
+9) Reinstall
+10) Uninstall service, keep files
+11) Purge everything
 0) Exit
 EOF
   echo
@@ -61,11 +63,12 @@ EOF
     3) run restart ;;
     4) run status ;;
     5) run logs ;;
-    6) run env ;;
-    7) run update ;;
-    8) run reinstall ;;
-    9) run uninstall ;;
-    10) run purge ;;
+    6) run cookies ;;
+    7) run env ;;
+    8) run update ;;
+    9) run reinstall ;;
+    10) run uninstall ;;
+    11) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice."; exit 1 ;;
   esac
@@ -108,6 +111,11 @@ run() {
       ;;
     logs|log)
       journalctl -u "${APP_NAME}" -f
+      ;;
+    cookies|cookie|sync-cookies)
+      need_root
+      cd "${APP_DIR}"
+      "${APP_DIR}/.venv/bin/python" -m tg_video_relay_bot.cookie_sync
       ;;
     env|config)
       need_root

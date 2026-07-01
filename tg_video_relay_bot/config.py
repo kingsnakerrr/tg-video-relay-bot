@@ -73,6 +73,8 @@ class Settings:
     auto_compress: bool
     compress_audio_kbps: int
     cookies_file: Path | None
+    cookie_sync_url: str
+    cookie_sync_interval_minutes: int
     upload_mode: str
     delete_after_all_uploads: bool
     bot_api_timeout: int
@@ -119,6 +121,8 @@ def load_settings() -> Settings:
         auto_compress=_env_bool("AUTO_COMPRESS", True),
         compress_audio_kbps=_env_int("COMPRESS_AUDIO_KBPS", 96),
         cookies_file=cookies_file,
+        cookie_sync_url=os.getenv("COOKIE_SYNC_URL", "").strip(),
+        cookie_sync_interval_minutes=max(1, _env_int("COOKIE_SYNC_INTERVAL_MINUTES", 360)),
         upload_mode=upload_mode,
         delete_after_all_uploads=_env_bool("DELETE_AFTER_ALL_UPLOADS", True),
         bot_api_timeout=_env_int("BOT_API_TIMEOUT", 30),

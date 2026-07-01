@@ -7,6 +7,7 @@ from pathlib import Path
 import yt_dlp
 
 from .config import Settings
+from .cookie_sync import CookieSyncError, sync_cookies_if_needed
 
 
 TEMP_SUFFIXES = (".part", ".ytdl", ".temp", ".tmp")
@@ -32,6 +33,13 @@ def download_video(url: str, settings: Settings) -> tuple[Path, str]:
     job_dir = settings.download_dir / uuid.uuid4().hex
     job_dir.mkdir(parents=True, exist_ok=False)
 
+    try:
+        sync_cookies_if_needed(settings)
+    except CookieSyncError as exc:
+        if not (settings.cookies_file and settings.cookies_file.exists()):
+            shutil.rmtree(job_dir, ignore_errors=True)
+            raise DownloadError(str(exc)) from exc
+
     options: dict[str, object] = {
         "format": settings.download_format,
         "outtmpl": str(job_dir / "%(title).180B [%(id)s].%(ext)s"),
@@ -53,7 +61,7 @@ def download_video(url: str, settings: Settings) -> tuple[Path, str]:
             "Referer": "https://x.com/",
         },
     }
-    if settings.cookies_file:
+    if settings.cookies_file and settings.cookies_file.exists():
         options["cookiefile"] = str(settings.cookies_file)
 
     try:

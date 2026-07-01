@@ -68,7 +68,7 @@ def _compress_once(
         "-map",
         "0:a?",
         "-vf",
-        f"scale=-2:{height}",
+        f"scale=-2:{height}:flags=lanczos,setsar=1",
         "-c:v",
         "libx264",
         "-preset",
@@ -87,6 +87,8 @@ def _compress_once(
         f"{audio_kbps}k",
         "-movflags",
         "+faststart",
+        "-metadata:s:v:0",
+        "rotate=0",
         str(output_path),
     ]
     result = _run(command)
