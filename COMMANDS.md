@@ -19,6 +19,7 @@ x status      # 查看状态
 x doctor      # 诊断服务和 8787 接口
 x test-submit "https://x.com/..." # 从 VPS 本地测试提交
 x logs        # 实时日志
+x fix-env     # 补齐缺少的 .env 默认配置
 x cookies     # 立即同步 cookies.txt
 x shortcut    # 查看 iPhone 快捷指令配置
 x env         # 修改 .env 配置

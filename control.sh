@@ -30,6 +30,7 @@ Usage:
   x logs               Follow live logs
   x doctor             Diagnose service and submit API
   x quality            Show original-quality upload settings
+  x fix-env            Add missing default .env keys
   x test-submit URL    Submit one URL from the VPS itself
   x cookies            Sync cookies.txt now
   x shortcut           Show iPhone Shortcut submit settings
@@ -53,14 +54,15 @@ Telegram Video Relay
 5) Doctor
 6) Logs
 7) Original-quality upload settings
-8) Test submit URL
-9) Sync cookies
-10) iPhone Shortcut settings
-11) Edit config
-12) Update
-13) Reinstall
-14) Uninstall service, keep files
-15) Purge everything
+8) Fix missing .env defaults
+9) Test submit URL
+10) Sync cookies
+11) iPhone Shortcut settings
+12) Edit config
+13) Update
+14) Reinstall
+15) Uninstall service, keep files
+16) Purge everything
 0) Exit
 EOF
   echo
@@ -73,14 +75,15 @@ EOF
     5) run doctor ;;
     6) run logs ;;
     7) run quality ;;
-    8) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
-    9) run cookies ;;
-    10) run shortcut ;;
-    11) run env ;;
-    12) run update ;;
-    13) run reinstall ;;
-    14) run uninstall ;;
-    15) run purge ;;
+    8) run fix-env ;;
+    9) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
+    10) run cookies ;;
+    11) run shortcut ;;
+    12) run env ;;
+    13) run update ;;
+    14) run reinstall ;;
+    15) run uninstall ;;
+    16) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice."; exit 1 ;;
   esac
@@ -130,6 +133,22 @@ ensure_submit_env() {
   grep -q '^SUBMIT_NOTIFY_CHAT_ID=' "${env_file}" || printf 'SUBMIT_NOTIFY_CHAT_ID=\n' >> "${env_file}"
 }
 
+ensure_upload_env() {
+  env_file="${APP_DIR}/.env"
+  [ -f "${env_file}" ] || return
+  grep -q '^BOT_API_BASE_URL=' "${env_file}" || printf 'BOT_API_BASE_URL=https://api.telegram.org\n' >> "${env_file}"
+  grep -q '^BOT_API_USE_LOCAL_FILE_URI=' "${env_file}" || printf 'BOT_API_USE_LOCAL_FILE_URI=false\n' >> "${env_file}"
+  grep -q '^MAX_UPLOAD_MB=' "${env_file}" || printf 'MAX_UPLOAD_MB=49\n' >> "${env_file}"
+  grep -q '^AUTO_COMPRESS=' "${env_file}" || printf 'AUTO_COMPRESS=true\n' >> "${env_file}"
+  grep -q '^COMPRESS_AUDIO_KBPS=' "${env_file}" || printf 'COMPRESS_AUDIO_KBPS=96\n' >> "${env_file}"
+  grep -q '^COMPRESS_MIN_VIDEO_KBPS=' "${env_file}" || printf 'COMPRESS_MIN_VIDEO_KBPS=60\n' >> "${env_file}"
+}
+
+ensure_env_defaults() {
+  ensure_upload_env
+  ensure_submit_env
+}
+
 run() {
   cmd="${1:-menu}"
   case "${cmd}" in
@@ -138,6 +157,7 @@ run() {
       ;;
     start)
       need_root
+      ensure_env_defaults
       systemctl start "${APP_NAME}"
       systemctl status "${APP_NAME}" --no-pager
       ;;
@@ -148,6 +168,7 @@ run() {
       ;;
     restart)
       need_root
+      ensure_env_defaults
       systemctl restart "${APP_NAME}"
       systemctl status "${APP_NAME}" --no-pager
       ;;
@@ -156,7 +177,7 @@ run() {
       ;;
     doctor)
       need_root
-      ensure_submit_env
+      ensure_env_defaults
       port="$(env_value SUBMIT_API_PORT)"
       enabled="$(env_value SUBMIT_API_ENABLED)"
       secret="$(env_value SUBMIT_API_SECRET)"
@@ -198,6 +219,7 @@ run() {
     quality)
       env_file="${APP_DIR}/.env"
       [ -f "${env_file}" ] || { echo "${env_file} not found."; exit 1; }
+      ensure_upload_env
       echo "== Current upload settings =="
       printf 'BOT_API_BASE_URL=%s\n' "$(env_value BOT_API_BASE_URL)"
       printf 'BOT_API_USE_LOCAL_FILE_URI=%s\n' "$(env_value BOT_API_USE_LOCAL_FILE_URI)"
@@ -219,12 +241,19 @@ run() {
       echo "Then run: x restart"
       echo "See: LOCAL_BOT_API.md"
       ;;
+    fix-env)
+      need_root
+      ensure_env_defaults
+      echo "Missing default .env keys have been added."
+      echo "Check with: x quality"
+      echo "Restart with: x restart"
+      ;;
     logs|log)
       journalctl -u "${APP_NAME}" -f
       ;;
     test-submit|test)
       need_root
-      ensure_submit_env
+      ensure_env_defaults
       port="$(env_value SUBMIT_API_PORT)"
       secret="$(env_value SUBMIT_API_SECRET)"
       url="${2:-}"
@@ -246,7 +275,7 @@ run() {
       ;;
     shortcut|submit)
       need_root
-      ensure_submit_env
+      ensure_env_defaults
       port="$(env_value SUBMIT_API_PORT)"
       secret="$(env_value SUBMIT_API_SECRET)"
       enabled="$(env_value SUBMIT_API_ENABLED)"
@@ -281,7 +310,7 @@ run() {
       git -C "${APP_DIR}" checkout "${BRANCH}"
       git -C "${APP_DIR}" pull --ff-only origin "${BRANCH}"
       "${APP_DIR}/.venv/bin/python" -m pip install -r "${APP_DIR}/requirements.txt"
-      ensure_submit_env
+      ensure_env_defaults
       if [ -f "${APP_DIR}/control.sh" ]; then
         install -m 755 "${APP_DIR}/control.sh" "${CONTROL_BIN}"
         install -m 755 "${APP_DIR}/control.sh" "${ALT_CONTROL_BIN}"
