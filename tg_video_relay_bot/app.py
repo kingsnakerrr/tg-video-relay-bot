@@ -128,7 +128,13 @@ def _handle_message(
 
 
 def run_bot(settings: Settings) -> None:
-    api = TelegramApi(settings.bot_token, settings.bot_api_timeout, settings.upload_timeout)
+    api = TelegramApi(
+        settings.bot_token,
+        settings.bot_api_timeout,
+        settings.upload_timeout,
+        base_url=settings.bot_api_base_url,
+        use_local_file_uri=settings.bot_api_use_local_file_uri,
+    )
     job_queue = JobQueue(api, settings)
     job_queue.start()
 

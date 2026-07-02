@@ -48,10 +48,19 @@ def _video_dimensions(file_path: Path) -> tuple[int, int] | None:
 
 
 class TelegramApi:
-    def __init__(self, token: str, timeout: int, upload_timeout: int) -> None:
-        self.base_url = f"https://api.telegram.org/bot{token}"
+    def __init__(
+        self,
+        token: str,
+        timeout: int,
+        upload_timeout: int,
+        *,
+        base_url: str = "https://api.telegram.org",
+        use_local_file_uri: bool = False,
+    ) -> None:
+        self.base_url = f"{base_url.rstrip('/')}/bot{token}"
         self.timeout = timeout
         self.upload_timeout = upload_timeout
+        self.use_local_file_uri = use_local_file_uri
 
     def _request(
         self,
@@ -70,7 +79,10 @@ class TelegramApi:
         if response.status_code == 413:
             raise TelegramApiError(
                 f"{method} failed: file is too large for Telegram Bot API. "
-                "Set MAX_UPLOAD_MB=49 and AUTO_COMPRESS=true, then restart the service."
+                "With the public Bot API, keep MAX_UPLOAD_MB=49 and AUTO_COMPRESS=true. "
+                "For original-quality large uploads, use a local Telegram Bot API server, "
+                "set BOT_API_BASE_URL to it, set BOT_API_USE_LOCAL_FILE_URI=true, "
+                "then set AUTO_COMPRESS=false."
             )
         try:
             payload = response.json()
@@ -124,6 +136,10 @@ class TelegramApi:
         dimensions = _video_dimensions(file_path)
         if dimensions:
             data["width"], data["height"] = dimensions
+        if self.use_local_file_uri:
+            data["video"] = file_path.resolve().as_uri()
+            self._request("sendVideo", data=data, timeout=self.upload_timeout)
+            return
         with file_path.open("rb") as handle:
             self._request(
                 "sendVideo",
@@ -140,6 +156,10 @@ class TelegramApi:
         caption: str,
     ) -> None:
         data = {"chat_id": chat_id, "caption": caption}
+        if self.use_local_file_uri:
+            data["document"] = file_path.resolve().as_uri()
+            self._request("sendDocument", data=data, timeout=self.upload_timeout)
+            return
         with file_path.open("rb") as handle:
             self._request(
                 "sendDocument",

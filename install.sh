@@ -9,7 +9,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-01.6"
+INSTALLER_VERSION="2026-07-02.2"
 
 die() {
   echo "ERROR: $*" >&2
@@ -149,6 +149,8 @@ if [ ! -f .env ]; then
 
   cat > .env <<EOF_ENV
 BOT_TOKEN=${BOT_TOKEN}
+BOT_API_BASE_URL=https://api.telegram.org
+BOT_API_USE_LOCAL_FILE_URI=false
 TARGET_CHAT_IDS=${TARGET_CHAT_IDS}
 ALLOWED_USER_IDS=${ALLOWED_USER_IDS}
 DOWNLOAD_DIR=downloads
@@ -158,6 +160,7 @@ MAX_FILE_MB=1900
 MAX_UPLOAD_MB=49
 AUTO_COMPRESS=true
 COMPRESS_AUDIO_KBPS=96
+COMPRESS_MIN_VIDEO_KBPS=60
 COOKIES_FILE=${APP_DIR}/cookies.txt
 COOKIE_SYNC_URL=
 COOKIE_SYNC_INTERVAL_MINUTES=360
@@ -178,8 +181,11 @@ else
 fi
 
 grep -q '^MAX_UPLOAD_MB=' .env || printf '\nMAX_UPLOAD_MB=49\n' >> .env
+grep -q '^BOT_API_BASE_URL=' .env || printf 'BOT_API_BASE_URL=https://api.telegram.org\n' >> .env
+grep -q '^BOT_API_USE_LOCAL_FILE_URI=' .env || printf 'BOT_API_USE_LOCAL_FILE_URI=false\n' >> .env
 grep -q '^AUTO_COMPRESS=' .env || printf 'AUTO_COMPRESS=true\n' >> .env
 grep -q '^COMPRESS_AUDIO_KBPS=' .env || printf 'COMPRESS_AUDIO_KBPS=96\n' >> .env
+grep -q '^COMPRESS_MIN_VIDEO_KBPS=' .env || printf 'COMPRESS_MIN_VIDEO_KBPS=60\n' >> .env
 if grep -q '^COOKIES_FILE=$' .env; then
   sed -i "s|^COOKIES_FILE=$|COOKIES_FILE=${APP_DIR}/cookies.txt|" .env
 fi

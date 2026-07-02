@@ -29,6 +29,7 @@ Usage:
   x status             Show service status
   x logs               Follow live logs
   x doctor             Diagnose service and submit API
+  x quality            Show original-quality upload settings
   x test-submit URL    Submit one URL from the VPS itself
   x cookies            Sync cookies.txt now
   x shortcut           Show iPhone Shortcut submit settings
@@ -51,14 +52,15 @@ Telegram Video Relay
 4) Status
 5) Doctor
 6) Logs
-7) Test submit URL
-8) Sync cookies
-9) iPhone Shortcut settings
-10) Edit config
-11) Update
-12) Reinstall
-13) Uninstall service, keep files
-14) Purge everything
+7) Original-quality upload settings
+8) Test submit URL
+9) Sync cookies
+10) iPhone Shortcut settings
+11) Edit config
+12) Update
+13) Reinstall
+14) Uninstall service, keep files
+15) Purge everything
 0) Exit
 EOF
   echo
@@ -70,14 +72,15 @@ EOF
     4) run status ;;
     5) run doctor ;;
     6) run logs ;;
-    7) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
-    8) run cookies ;;
-    9) run shortcut ;;
-    10) run env ;;
-    11) run update ;;
-    12) run reinstall ;;
-    13) run uninstall ;;
-    14) run purge ;;
+    7) run quality ;;
+    8) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
+    9) run cookies ;;
+    10) run shortcut ;;
+    11) run env ;;
+    12) run update ;;
+    13) run reinstall ;;
+    14) run uninstall ;;
+    15) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice."; exit 1 ;;
   esac
@@ -170,6 +173,12 @@ run() {
         echo "SUBMIT_API_SECRET=missing"
       fi
       echo
+      echo "== Upload API .env =="
+      printf 'BOT_API_BASE_URL=%s\n' "$(env_value BOT_API_BASE_URL)"
+      printf 'BOT_API_USE_LOCAL_FILE_URI=%s\n' "$(env_value BOT_API_USE_LOCAL_FILE_URI)"
+      printf 'MAX_UPLOAD_MB=%s\n' "$(env_value MAX_UPLOAD_MB)"
+      printf 'AUTO_COMPRESS=%s\n' "$(env_value AUTO_COMPRESS)"
+      echo
       echo "== Service =="
       systemctl is-active "${APP_NAME}" || true
       systemctl status "${APP_NAME}" --no-pager -n 5 || true
@@ -185,6 +194,30 @@ run() {
       echo "  x update"
       echo "  x restart"
       echo "  x logs"
+      ;;
+    quality)
+      env_file="${APP_DIR}/.env"
+      [ -f "${env_file}" ] || { echo "${env_file} not found."; exit 1; }
+      echo "== Current upload settings =="
+      printf 'BOT_API_BASE_URL=%s\n' "$(env_value BOT_API_BASE_URL)"
+      printf 'BOT_API_USE_LOCAL_FILE_URI=%s\n' "$(env_value BOT_API_USE_LOCAL_FILE_URI)"
+      printf 'MAX_UPLOAD_MB=%s\n' "$(env_value MAX_UPLOAD_MB)"
+      printf 'AUTO_COMPRESS=%s\n' "$(env_value AUTO_COMPRESS)"
+      printf 'UPLOAD_MODE=%s\n' "$(env_value UPLOAD_MODE)"
+      echo
+      echo "Public Telegram Bot API mode:"
+      echo "  MAX_UPLOAD_MB=49"
+      echo "  AUTO_COMPRESS=true"
+      echo
+      echo "Original-quality large upload mode requires telegram-bot-api running on this VPS."
+      echo "After it is running locally, set these in x env:"
+      echo "  BOT_API_BASE_URL=http://127.0.0.1:8081"
+      echo "  BOT_API_USE_LOCAL_FILE_URI=true"
+      echo "  MAX_UPLOAD_MB=1900"
+      echo "  AUTO_COMPRESS=false"
+      echo
+      echo "Then run: x restart"
+      echo "See: LOCAL_BOT_API.md"
       ;;
     logs|log)
       journalctl -u "${APP_NAME}" -f

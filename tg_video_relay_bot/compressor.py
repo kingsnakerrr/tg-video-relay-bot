@@ -42,10 +42,15 @@ def _probe_duration(file_path: Path) -> float:
     return duration
 
 
-def _target_video_bitrate(duration: float, target_bytes: int, audio_kbps: int) -> int:
+def _target_video_bitrate(
+    duration: float,
+    target_bytes: int,
+    audio_kbps: int,
+    min_video_kbps: int,
+) -> int:
     audio_bps = audio_kbps * 1000
     total_bps = int((target_bytes * 8) / duration)
-    return max(180_000, total_bps - audio_bps)
+    return max(min_video_kbps * 1000, total_bps - audio_bps)
 
 
 def _compress_once(
@@ -56,8 +61,9 @@ def _compress_once(
     target_bytes: int,
     height: int,
     audio_kbps: int,
+    min_video_kbps: int,
 ) -> None:
-    video_bps = _target_video_bitrate(duration, target_bytes, audio_kbps)
+    video_bps = _target_video_bitrate(duration, target_bytes, audio_kbps, min_video_kbps)
     command = [
         "ffmpeg",
         "-y",
@@ -104,28 +110,33 @@ def prepare_upload_file(file_path: Path, settings: Settings) -> tuple[Path, str 
     if not settings.auto_compress:
         raise CompressionError(
             f"File is {original_size / 1024 / 1024:.1f} MB, above MAX_UPLOAD_MB={settings.max_upload_mb}. "
-            "Enable AUTO_COMPRESS=true or lower DOWNLOAD_FORMAT."
+            "Enable AUTO_COMPRESS=true for public Bot API uploads, or use a local Telegram Bot API server "
+            "with BOT_API_USE_LOCAL_FILE_URI=true for original-quality large uploads."
         )
 
     duration = _probe_duration(file_path)
     attempts = [
-        (720, 0.90),
-        (540, 0.78),
-        (480, 0.66),
-        (360, 0.54),
+        (720, 0.88, 96),
+        (540, 0.72, 80),
+        (480, 0.58, 64),
+        (360, 0.46, 56),
+        (240, 0.36, 48),
+        (144, 0.28, 40),
     ]
 
     best_output: Path | None = None
-    for height, ratio in attempts:
+    for height, ratio, audio_cap_kbps in attempts:
         output_path = file_path.with_name(f"{file_path.stem}.tg-{height}p.mp4")
         target_bytes = int(settings.max_upload_bytes * ratio)
+        audio_kbps = min(settings.compress_audio_kbps, audio_cap_kbps)
         _compress_once(
             file_path,
             output_path,
             duration=duration,
             target_bytes=target_bytes,
             height=height,
-            audio_kbps=settings.compress_audio_kbps,
+            audio_kbps=audio_kbps,
+            min_video_kbps=settings.compress_min_video_kbps,
         )
         best_output = output_path
         if output_path.stat().st_size <= settings.max_upload_bytes:
@@ -136,7 +147,9 @@ def prepare_upload_file(file_path: Path, settings: Settings) -> tuple[Path, str 
     if best_output is not None:
         raise CompressionError(
             f"Compressed file is still too large: {best_output.stat().st_size / 1024 / 1024:.1f} MB. "
-            "Try DOWNLOAD_FORMAT=best[height<=480]/best or lower MAX_UPLOAD_MB."
+            "This video is too long for the public Telegram Bot API 50 MB upload limit. "
+            "Try DOWNLOAD_FORMAT=best[height<=360]/best, set COMPRESS_MIN_VIDEO_KBPS=40, "
+            "or use a local Telegram Bot API server for large uploads."
         )
 
     raise CompressionError("Compression did not produce an output file.")

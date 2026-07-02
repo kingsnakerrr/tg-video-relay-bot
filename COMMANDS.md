@@ -126,3 +126,35 @@ x logs
 x env
 x restart
 ```
+
+## 原画质大文件
+
+查看当前上传模式：
+
+```bash
+x quality
+```
+
+公网 Telegram Bot API 模式建议保持：
+
+```env
+MAX_UPLOAD_MB=49
+AUTO_COMPRESS=true
+```
+
+不想降低画质，需要先在 VPS 上运行官方 Local Bot API Server，然后在 `x env` 里设置：
+
+```env
+BOT_API_BASE_URL=http://127.0.0.1:8081
+BOT_API_USE_LOCAL_FILE_URI=true
+MAX_UPLOAD_MB=1900
+AUTO_COMPRESS=false
+```
+
+保存后执行：
+
+```bash
+x restart
+```
+
+详细说明见 `LOCAL_BOT_API.md`。

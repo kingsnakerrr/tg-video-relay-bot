@@ -75,6 +75,8 @@ def _env_int(name: str, default: int) -> int:
 @dataclass(frozen=True)
 class Settings:
     bot_token: str
+    bot_api_base_url: str
+    bot_api_use_local_file_uri: bool
     target_chat_ids: list[int | str]
     allowed_user_ids: set[int]
     download_dir: Path
@@ -84,6 +86,7 @@ class Settings:
     max_upload_mb: int
     auto_compress: bool
     compress_audio_kbps: int
+    compress_min_video_kbps: int
     cookies_file: Path | None
     cookie_sync_url: str
     cookie_sync_interval_minutes: int
@@ -133,6 +136,8 @@ def load_settings() -> Settings:
 
     return Settings(
         bot_token=bot_token,
+        bot_api_base_url=os.getenv("BOT_API_BASE_URL", "https://api.telegram.org").strip().rstrip("/"),
+        bot_api_use_local_file_uri=_env_bool("BOT_API_USE_LOCAL_FILE_URI", False),
         target_chat_ids=target_chat_ids,
         allowed_user_ids=allowed_user_ids,
         download_dir=Path(os.getenv("DOWNLOAD_DIR", "downloads")).expanduser(),
@@ -142,6 +147,7 @@ def load_settings() -> Settings:
         max_upload_mb=_env_int("MAX_UPLOAD_MB", 49),
         auto_compress=_env_bool("AUTO_COMPRESS", True),
         compress_audio_kbps=_env_int("COMPRESS_AUDIO_KBPS", 96),
+        compress_min_video_kbps=_env_int("COMPRESS_MIN_VIDEO_KBPS", 60),
         cookies_file=cookies_file,
         cookie_sync_url=os.getenv("COOKIE_SYNC_URL", "").strip(),
         cookie_sync_interval_minutes=max(1, _env_int("COOKIE_SYNC_INTERVAL_MINUTES", 360)),
