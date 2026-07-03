@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from .formats import DEFAULT_DOWNLOAD_FORMAT
+
 
 def load_dotenv(path: Path) -> None:
     if not path.exists():
@@ -122,6 +124,7 @@ class Settings:
     upload_timeout: int
     poll_timeout: int
     worker_count: int
+    telegram_resolution_menu: bool
 
     @property
     def max_file_bytes(self) -> int:
@@ -162,7 +165,7 @@ def load_settings() -> Settings:
         target_chat_ids=target_chat_ids,
         allowed_user_ids=allowed_user_ids,
         download_dir=Path(os.getenv("DOWNLOAD_DIR", "downloads")).expanduser(),
-        download_format=os.getenv("DOWNLOAD_FORMAT", "bv*+ba/best"),
+        download_format=os.getenv("DOWNLOAD_FORMAT", DEFAULT_DOWNLOAD_FORMAT),
         merge_output_format=os.getenv("MERGE_OUTPUT_FORMAT", "mp4"),
         max_file_mb=_env_int("MAX_FILE_MB", 1900),
         max_upload_mb=_env_int("MAX_UPLOAD_MB", 49),
@@ -186,4 +189,5 @@ def load_settings() -> Settings:
         upload_timeout=_env_int("UPLOAD_TIMEOUT", 1800),
         poll_timeout=_env_int("POLL_TIMEOUT", 50),
         worker_count=max(1, _env_int("WORKER_COUNT", 1)),
+        telegram_resolution_menu=_env_bool("TELEGRAM_RESOLUTION_MENU", True),
     )

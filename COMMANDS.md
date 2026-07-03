@@ -18,6 +18,7 @@ x restart     # 重启
 x status      # 查看状态
 x doctor      # 诊断服务和 8787 接口
 x mode        # 查看当前上传模式和两个模式状态
+x 1080p       # 设置 YouTube 最高 1080p + 本地原画质不压缩
 x local       # 切到本地 Bot API 原画质模式
 x public      # 切回公网 Bot API 兼容模式
 x ytdlp-update # 更新 yt-dlp，修复 YouTube/TikTok 常见下载失败
@@ -33,6 +34,20 @@ x update      # 更新代码并重启
 x reinstall   # 重新执行安装
 x uninstall   # 卸载服务，保留 /opt/tg-video-relay-bot 和 .env
 x purge       # 彻底删除服务和 /opt/tg-video-relay-bot
+```
+
+Telegram 里直接发链接会先显示可选清晰度按钮。iPhone 快捷指令提交不会弹按钮，会直接按默认最高 1080p 下载；源视频低于 1080p 时自动下载最高可用。
+
+关闭 Telegram 清晰度选择：
+
+```env
+TELEGRAM_RESOLUTION_MENU=false
+```
+
+保存后：
+
+```bash
+x restart
 ```
 
 旧命令 `tg-video-relay` 也会保留，但以后记 `x` 就行。
@@ -175,6 +190,7 @@ x local-api
 常用短命令：
 
 ```bash
+x 1080p             # YouTube 最高 1080p；本地 Bot API 可用时自动不压缩
 x local-api-install  # 安装/更新官方 telegram-bot-api
 x local-api-switch   # 切到本地原画质大文件模式
 x local-api-status   # 查看本地 API 状态

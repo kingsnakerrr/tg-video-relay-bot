@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import shutil
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
 import yt_dlp
 
 from .config import Settings
 from .cookie_sync import CookieSyncError, sync_cookies_if_needed
+from .formats import DEFAULT_DOWNLOAD_FORMAT, DEFAULT_MAX_HEIGHT, format_for_exact_height
 
 
 TEMP_SUFFIXES = (".part", ".ytdl", ".temp", ".tmp")
@@ -15,6 +17,20 @@ TEMP_SUFFIXES = (".part", ".ytdl", ".temp", ".tmp")
 
 class DownloadError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class ResolutionChoice:
+    height: int
+    label: str
+    format_selector: str
+
+
+@dataclass(frozen=True)
+class ResolutionProbe:
+    title: str
+    choices: list[ResolutionChoice]
+    default_height: int | None
 
 
 def _url_kind(url: str) -> str:
@@ -79,22 +95,18 @@ def _media_files(directory: Path) -> list[Path]:
     return files
 
 
-def download_video(url: str, settings: Settings) -> tuple[Path, str]:
-    settings.download_dir.mkdir(parents=True, exist_ok=True)
-    job_dir = settings.download_dir / uuid.uuid4().hex
-    job_dir.mkdir(parents=True, exist_ok=False)
-
+def _sync_cookies_or_fail(settings: Settings, cleanup_dir: Path | None = None) -> None:
     try:
         sync_cookies_if_needed(settings)
     except CookieSyncError as exc:
         if not (settings.cookies_file and settings.cookies_file.exists()):
-            shutil.rmtree(job_dir, ignore_errors=True)
+            if cleanup_dir is not None:
+                shutil.rmtree(cleanup_dir, ignore_errors=True)
             raise DownloadError(str(exc)) from exc
 
+
+def _base_ytdlp_options(url: str, settings: Settings) -> dict[str, object]:
     options: dict[str, object] = {
-        "format": settings.download_format,
-        "outtmpl": str(job_dir / "%(title).180B [%(id)s].%(ext)s"),
-        "merge_output_format": settings.merge_output_format,
         "noplaylist": True,
         "restrictfilenames": True,
         "quiet": True,
@@ -119,6 +131,70 @@ def download_video(url: str, settings: Settings) -> tuple[Path, str]:
         }
     if settings.cookies_file and settings.cookies_file.exists():
         options["cookiefile"] = str(settings.cookies_file)
+    return options
+
+
+def probe_resolutions(url: str, settings: Settings) -> ResolutionProbe:
+    _sync_cookies_or_fail(settings)
+    options = _base_ytdlp_options(url, settings)
+
+    try:
+        with yt_dlp.YoutubeDL(options) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception as exc:
+        raise DownloadError(_friendly_download_error(url, str(exc))) from exc
+
+    info = info or {}
+    formats = info.get("formats") or []
+    heights: set[int] = set()
+    for item in formats:
+        if not isinstance(item, dict):
+            continue
+        vcodec = str(item.get("vcodec") or "")
+        if vcodec == "none":
+            continue
+        try:
+            height = int(item.get("height") or 0)
+        except (TypeError, ValueError):
+            continue
+        if height > 0:
+            heights.add(height)
+
+    if not heights:
+        height = int(info.get("height") or 0)
+        if height > 0:
+            heights.add(height)
+
+    sorted_heights = sorted(heights, reverse=True)
+    choices = [
+        ResolutionChoice(
+            height=height,
+            label=f"{height}p",
+            format_selector=format_for_exact_height(height),
+        )
+        for height in sorted_heights[:10]
+    ]
+    default_candidates = [height for height in sorted_heights if height <= DEFAULT_MAX_HEIGHT]
+    default_height = default_candidates[0] if default_candidates else (sorted_heights[-1] if sorted_heights else None)
+    title = str(info.get("title") or "video")
+    return ResolutionProbe(title=title, choices=choices, default_height=default_height)
+
+
+def download_video(url: str, settings: Settings, download_format: str | None = None) -> tuple[Path, str]:
+    settings.download_dir.mkdir(parents=True, exist_ok=True)
+    job_dir = settings.download_dir / uuid.uuid4().hex
+    job_dir.mkdir(parents=True, exist_ok=False)
+
+    _sync_cookies_or_fail(settings, cleanup_dir=job_dir)
+
+    options = _base_ytdlp_options(url, settings)
+    options.update(
+        {
+            "format": download_format or settings.download_format or DEFAULT_DOWNLOAD_FORMAT,
+            "outtmpl": str(job_dir / "%(title).180B [%(id)s].%(ext)s"),
+            "merge_output_format": settings.merge_output_format,
+        }
+    )
 
     try:
         with yt_dlp.YoutubeDL(options) as ydl:

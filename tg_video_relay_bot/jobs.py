@@ -20,6 +20,8 @@ class VideoJob:
     source_message_id: int | None
     source_user_id: int | None
     url: str
+    download_format: str | None = None
+    resolution_label: str | None = None
 
 
 class JobQueue:
@@ -59,11 +61,14 @@ class JobQueue:
         )
 
     def _process(self, job: VideoJob) -> None:
-        self._reply(job, "收到链接，开始下载。")
+        if job.resolution_label:
+            self._reply(job, f"收到链接，开始下载：{job.resolution_label}")
+        else:
+            self._reply(job, "收到链接，开始下载。")
 
         file_path: Path | None = None
         try:
-            file_path, title = download_video(job.url, self.settings)
+            file_path, title = download_video(job.url, self.settings, download_format=job.download_format)
             size_mb = file_path.stat().st_size / 1024 / 1024
             self._reply(job, f"下载完成：{title}\n大小：{size_mb:.1f} MB\n开始上传到 {len(self.settings.target_chat_ids)} 个目标。")
 

@@ -15,6 +15,7 @@ BUILD_JOBS="${BUILD_JOBS:-1}"
 INSTALL_LOG="${INSTALL_LOG:-/var/log/tg-video-relay-local-api-install.log}"
 SWAP_FILE="${SWAP_FILE:-/swapfile-tg-video-relay}"
 SWAP_SIZE="${SWAP_SIZE:-4G}"
+DEFAULT_DOWNLOAD_FORMAT='bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best'
 
 need_root() {
   if [ "$(id -u)" -ne 0 ]; then
@@ -199,6 +200,7 @@ switch_to_local_api() {
 
   set_env_value "${APP_DIR}/.env" BOT_API_BASE_URL "http://${LOCAL_API_HOST}:${LOCAL_API_PORT}"
   set_env_value "${APP_DIR}/.env" BOT_API_USE_LOCAL_FILE_URI "true"
+  set_env_value "${APP_DIR}/.env" DOWNLOAD_FORMAT "${DEFAULT_DOWNLOAD_FORMAT}"
   set_env_value "${APP_DIR}/.env" MAX_UPLOAD_MB "1900"
   set_env_value "${APP_DIR}/.env" AUTO_COMPRESS "false"
 
@@ -228,6 +230,7 @@ status() {
   echo "== Relay upload settings / 转发机器人上传配置 =="
   printf 'BOT_API_BASE_URL=%s\n' "$(env_value BOT_API_BASE_URL "${APP_DIR}/.env")"
   printf 'BOT_API_USE_LOCAL_FILE_URI=%s\n' "$(env_value BOT_API_USE_LOCAL_FILE_URI "${APP_DIR}/.env")"
+  printf 'DOWNLOAD_FORMAT=%s\n' "$(env_value DOWNLOAD_FORMAT "${APP_DIR}/.env")"
   printf 'MAX_UPLOAD_MB=%s\n' "$(env_value MAX_UPLOAD_MB "${APP_DIR}/.env")"
   printf 'AUTO_COMPRESS=%s\n' "$(env_value AUTO_COMPRESS "${APP_DIR}/.env")"
   echo

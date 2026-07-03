@@ -97,7 +97,7 @@ class TelegramApi:
     def get_updates(self, offset: int | None, timeout: int) -> list[dict[str, Any]]:
         data: dict[str, Any] = {
             "timeout": timeout,
-            "allowed_updates": '["message","channel_post"]',
+            "allowed_updates": '["message","channel_post","callback_query"]',
         }
         if offset is not None:
             data["offset"] = offset
@@ -110,6 +110,7 @@ class TelegramApi:
         text: str,
         *,
         reply_to_message_id: int | None = None,
+        reply_markup: dict[str, Any] | None = None,
     ) -> None:
         data: dict[str, Any] = {
             "chat_id": chat_id,
@@ -119,7 +120,42 @@ class TelegramApi:
         if reply_to_message_id is not None:
             data["reply_to_message_id"] = reply_to_message_id
             data["allow_sending_without_reply"] = True
+        if reply_markup is not None:
+            data["reply_markup"] = json.dumps(reply_markup, ensure_ascii=False)
         self._request("sendMessage", data=data)
+
+    def edit_message_text(
+        self,
+        chat_id: int | str,
+        message_id: int,
+        text: str,
+        *,
+        reply_markup: dict[str, Any] | None = None,
+    ) -> None:
+        data: dict[str, Any] = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": text,
+            "disable_web_page_preview": True,
+        }
+        if reply_markup is not None:
+            data["reply_markup"] = json.dumps(reply_markup, ensure_ascii=False)
+        self._request("editMessageText", data=data)
+
+    def answer_callback_query(
+        self,
+        callback_query_id: str,
+        text: str = "",
+        *,
+        show_alert: bool = False,
+    ) -> None:
+        data: dict[str, Any] = {
+            "callback_query_id": callback_query_id,
+            "show_alert": "true" if show_alert else "false",
+        }
+        if text:
+            data["text"] = text
+        self._request("answerCallbackQuery", data=data)
 
     def send_video(
         self,

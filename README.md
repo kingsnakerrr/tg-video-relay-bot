@@ -183,7 +183,10 @@ curl -L "你的COOKIE_SYNC_URL" | head
 ## 常见问题
 
 - 上传失败：确认机器人在目标频道/群组里有发消息权限。
-- 视频太大：调小 `MAX_FILE_MB`，或把 `DOWNLOAD_FORMAT` 改成较低清晰度，比如 `best[height<=720]/best`。
+- YouTube 默认最高 1080p：`DOWNLOAD_FORMAT=bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best`。想 1080p 且不压缩，先装好 Local Bot API，然后执行 `x 1080p`。
+- Telegram 里直接发链接会返回可下载清晰度按钮，点选后才开始下载。iPhone 快捷指令不会弹按钮，会直接按默认最高 1080p 下载；源视频不到 1080p 时自动拿最高可用。
+- 不想在 Telegram 里选清晰度：把 `.env` 里的 `TELEGRAM_RESOLUTION_MENU=false`，然后执行 `x restart`。
+- 视频太大：公网 Bot API 只能约 50MB；不想压缩请用 `x local-api` 安装本地 Bot API，再用 `x 1080p`。
 - Telegram 不识别视频：把 `UPLOAD_MODE=document`，会作为文件发送。
 - YouTube/TikTok/X/Douyin 下载失败：升级 `yt-dlp`：`pip install -U yt-dlp`。
 - `Request Entity Too Large`：视频超过公共 Telegram Bot API 上传限制。默认 `MAX_UPLOAD_MB=49` 且 `AUTO_COMPRESS=true` 会自动压缩后再上传。改完 `.env` 后执行 `systemctl restart telegram-video-relay`。

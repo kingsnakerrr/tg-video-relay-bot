@@ -11,6 +11,7 @@ ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
 LOCAL_API_NAME="${LOCAL_API_NAME:-telegram-bot-api}"
 LOCAL_API_ENV="${LOCAL_API_ENV:-/etc/telegram-bot-api.env}"
 LOCAL_API_PORT="${LOCAL_API_PORT:-8081}"
+DEFAULT_DOWNLOAD_FORMAT='bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best'
 
 need_root() {
   if [ "$(id -u)" -ne 0 ]; then
@@ -35,6 +36,7 @@ Usage / 用法:
   x ytdlp-update       Update yt-dlp downloader / 更新 yt-dlp 下载器
   x ytdlp-version      Show yt-dlp version / 查看 yt-dlp 版本
   x mode               Show upload mode status / 查看上传模式状态
+  x 1080p              Set 1080p no-compress defaults / 设置 1080p 不压缩
   x local              Switch to Local Bot API mode / 切换到本地原画质模式
   x public             Switch to public Bot API mode / 切回公网兼容模式
   x quality            Show original-quality upload settings / 查看原画质上传配置
@@ -89,18 +91,19 @@ Actions / 操作菜单
 5) Doctor / 诊断
 6) Logs / 日志
 7) Upload mode status / 上传模式状态
-8) Original-quality upload settings / 原画质上传配置
-9) Update yt-dlp downloader / 更新 yt-dlp 下载器
-10) Local Bot API server / 本地 Bot API 服务
-11) Fix missing .env defaults / 补齐缺少的 .env 默认配置
-12) Test submit URL / 测试提交链接
-13) Sync cookies / 同步 cookies
-14) iPhone Shortcut settings / iPhone 快捷指令配置
-15) Edit config / 编辑配置
-16) Update / 更新
-17) Reinstall / 重装
-18) Uninstall service, keep files / 卸载服务但保留文件
-19) Purge everything / 彻底删除
+8) YouTube 1080p no-compress / YouTube 1080p 不压缩
+9) Original-quality upload settings / 原画质上传配置
+10) Update yt-dlp downloader / 更新 yt-dlp 下载器
+11) Local Bot API server / 本地 Bot API 服务
+12) Fix missing .env defaults / 补齐缺少的 .env 默认配置
+13) Test submit URL / 测试提交链接
+14) Sync cookies / 同步 cookies
+15) iPhone Shortcut settings / iPhone 快捷指令配置
+16) Edit config / 编辑配置
+17) Update / 更新
+18) Reinstall / 重装
+19) Uninstall service, keep files / 卸载服务但保留文件
+20) Purge everything / 彻底删除
 0) Exit / 退出
 EOF
   echo
@@ -113,18 +116,19 @@ EOF
     5) run doctor ;;
     6) run logs ;;
     7) run mode ;;
-    8) run quality ;;
-    9) run ytdlp-update ;;
-    10) run local-api ;;
-    11) run fix-env ;;
-    12) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
-    13) run cookies ;;
-    14) run shortcut ;;
-    15) run env ;;
-    16) run update ;;
-    17) run reinstall ;;
-    18) run uninstall ;;
-    19) run purge ;;
+    8) run 1080p ;;
+    9) run quality ;;
+    10) run ytdlp-update ;;
+    11) run local-api ;;
+    12) run fix-env ;;
+    13) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
+    14) run cookies ;;
+    15) run shortcut ;;
+    16) run env ;;
+    17) run update ;;
+    18) run reinstall ;;
+    19) run uninstall ;;
+    20) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice. / 选择无效。"; exit 1 ;;
   esac
@@ -147,6 +151,18 @@ env_value() {
     return
   fi
   grep -E "^${key}=" "${APP_DIR}/.env" | tail -n 1 | cut -d= -f2-
+}
+
+set_env_value() {
+  file="$1"
+  key="$2"
+  value="$3"
+  touch "${file}"
+  if grep -q "^${key}=" "${file}"; then
+    sed -i "s|^${key}=.*|${key}=${value}|" "${file}"
+  else
+    printf '%s=%s\n' "${key}" "${value}" >> "${file}"
+  fi
 }
 
 is_local_mode_selected() {
@@ -227,8 +243,39 @@ mode_status() {
   echo "== Current .env upload settings / 当前 .env 上传配置 =="
   printf 'BOT_API_BASE_URL=%s\n' "$(env_value BOT_API_BASE_URL)"
   printf 'BOT_API_USE_LOCAL_FILE_URI=%s\n' "$(env_value BOT_API_USE_LOCAL_FILE_URI)"
+  printf 'DOWNLOAD_FORMAT=%s\n' "$(env_value DOWNLOAD_FORMAT)"
   printf 'MAX_UPLOAD_MB=%s\n' "$(env_value MAX_UPLOAD_MB)"
   printf 'AUTO_COMPRESS=%s\n' "$(env_value AUTO_COMPRESS)"
+}
+
+set_1080p_original_defaults() {
+  need_root
+  ensure_env_defaults
+  env_file="${APP_DIR}/.env"
+  [ -f "${env_file}" ] || { echo "${env_file} not found."; exit 1; }
+
+  set_env_value "${env_file}" DOWNLOAD_FORMAT "${DEFAULT_DOWNLOAD_FORMAT}"
+  set_env_value "${env_file}" MERGE_OUTPUT_FORMAT "mp4"
+  set_env_value "${env_file}" UPLOAD_MODE "video"
+
+  if systemctl is-active --quiet "${LOCAL_API_NAME}" 2>/dev/null; then
+    set_env_value "${env_file}" MAX_UPLOAD_MB "1900"
+    set_env_value "${env_file}" AUTO_COMPRESS "false"
+    bash "${APP_DIR}/install_local_bot_api.sh" switch
+    echo
+    echo "Done. YouTube will prefer up to 1080p and upload without compression."
+    echo "完成。YouTube 会优先下载最高 1080p，并使用不压缩上传。"
+  else
+    echo "Saved DOWNLOAD_FORMAT for 1080p, but Local Bot API is not active."
+    echo "已保存 1080p 下载格式，但本地 Bot API 还没运行。"
+    echo
+    echo "No-compress large uploads need Local Bot API. Run:"
+    echo "不压缩上传大视频需要本地 Bot API，请执行："
+    echo "  x local-api-install"
+    echo "  x local"
+    echo "  x 1080p"
+    systemctl restart "${APP_NAME}" 2>/dev/null || true
+  fi
 }
 
 generate_secret() {
@@ -262,12 +309,14 @@ ensure_upload_env() {
   grep -q '^BOT_API_BASE_URL=' "${env_file}" || printf 'BOT_API_BASE_URL=https://api.telegram.org\n' >> "${env_file}"
   grep -q '^BOT_API_USE_LOCAL_FILE_URI=' "${env_file}" || printf 'BOT_API_USE_LOCAL_FILE_URI=false\n' >> "${env_file}"
   grep -q '^MAX_UPLOAD_MB=' "${env_file}" || printf 'MAX_UPLOAD_MB=49\n' >> "${env_file}"
+  grep -q '^DOWNLOAD_FORMAT=' "${env_file}" || printf 'DOWNLOAD_FORMAT=%s\n' "${DEFAULT_DOWNLOAD_FORMAT}" >> "${env_file}"
   grep -q '^AUTO_COMPRESS=' "${env_file}" || printf 'AUTO_COMPRESS=true\n' >> "${env_file}"
   grep -q '^COMPRESS_AUDIO_KBPS=' "${env_file}" || printf 'COMPRESS_AUDIO_KBPS=96\n' >> "${env_file}"
   grep -q '^COMPRESS_MIN_VIDEO_KBPS=' "${env_file}" || printf 'COMPRESS_MIN_VIDEO_KBPS=60\n' >> "${env_file}"
   grep -q '^YTDLP_FORCE_IPV4=' "${env_file}" || printf 'YTDLP_FORCE_IPV4=true\n' >> "${env_file}"
   grep -q '^YTDLP_HTTP_CHUNK_SIZE=' "${env_file}" || printf 'YTDLP_HTTP_CHUNK_SIZE=10M\n' >> "${env_file}"
   grep -q '^YOUTUBE_PLAYER_CLIENTS=' "${env_file}" || printf 'YOUTUBE_PLAYER_CLIENTS=android,web\n' >> "${env_file}"
+  grep -q '^TELEGRAM_RESOLUTION_MENU=' "${env_file}" || printf 'TELEGRAM_RESOLUTION_MENU=true\n' >> "${env_file}"
 }
 
 ensure_env_defaults() {
@@ -305,6 +354,9 @@ run() {
       need_root
       mode_status
       ;;
+    1080p|youtube-1080p|quality-1080p)
+      set_1080p_original_defaults
+      ;;
     doctor)
       need_root
       ensure_env_defaults
@@ -327,11 +379,13 @@ run() {
       echo "== Upload API .env / 上传接口配置 =="
       printf 'BOT_API_BASE_URL=%s\n' "$(env_value BOT_API_BASE_URL)"
       printf 'BOT_API_USE_LOCAL_FILE_URI=%s\n' "$(env_value BOT_API_USE_LOCAL_FILE_URI)"
+      printf 'DOWNLOAD_FORMAT=%s\n' "$(env_value DOWNLOAD_FORMAT)"
       printf 'MAX_UPLOAD_MB=%s\n' "$(env_value MAX_UPLOAD_MB)"
       printf 'AUTO_COMPRESS=%s\n' "$(env_value AUTO_COMPRESS)"
       printf 'YTDLP_FORCE_IPV4=%s\n' "$(env_value YTDLP_FORCE_IPV4)"
       printf 'YTDLP_HTTP_CHUNK_SIZE=%s\n' "$(env_value YTDLP_HTTP_CHUNK_SIZE)"
       printf 'YOUTUBE_PLAYER_CLIENTS=%s\n' "$(env_value YOUTUBE_PLAYER_CLIENTS)"
+      printf 'TELEGRAM_RESOLUTION_MENU=%s\n' "$(env_value TELEGRAM_RESOLUTION_MENU)"
       echo
       echo "== Service / 服务 =="
       systemctl is-active "${APP_NAME}" || true
@@ -371,6 +425,7 @@ run() {
       echo "Original-quality large upload mode requires telegram-bot-api running on this VPS."
       echo "原画质大文件模式需要 VPS 上运行 telegram-bot-api。"
       echo "After it is running locally, set these in x env / 本地服务运行后，在 x env 里设置:"
+      echo "  DOWNLOAD_FORMAT=${DEFAULT_DOWNLOAD_FORMAT}"
       echo "  BOT_API_BASE_URL=http://127.0.0.1:8081"
       echo "  BOT_API_USE_LOCAL_FILE_URI=true"
       echo "  MAX_UPLOAD_MB=1900"

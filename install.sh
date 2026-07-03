@@ -9,7 +9,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-03.8"
+INSTALLER_VERSION="2026-07-03.10"
 
 die() {
   echo "ERROR: $*" >&2
@@ -181,7 +181,7 @@ BOT_API_USE_LOCAL_FILE_URI=false
 TARGET_CHAT_IDS=${TARGET_CHAT_IDS}
 ALLOWED_USER_IDS=${ALLOWED_USER_IDS}
 DOWNLOAD_DIR=downloads
-DOWNLOAD_FORMAT=bv*+ba/best
+DOWNLOAD_FORMAT=bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best
 MERGE_OUTPUT_FORMAT=mp4
 MAX_FILE_MB=1900
 MAX_UPLOAD_MB=49
@@ -200,6 +200,7 @@ BOT_API_TIMEOUT=30
 UPLOAD_TIMEOUT=1800
 POLL_TIMEOUT=50
 WORKER_COUNT=1
+TELEGRAM_RESOLUTION_MENU=true
 SUBMIT_API_ENABLED=true
 SUBMIT_API_HOST=0.0.0.0
 SUBMIT_API_PORT=8787
@@ -211,6 +212,7 @@ else
 fi
 
 grep -q '^MAX_UPLOAD_MB=' .env || printf '\nMAX_UPLOAD_MB=49\n' >> .env
+grep -q '^DOWNLOAD_FORMAT=' .env || printf 'DOWNLOAD_FORMAT=bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best\n' >> .env
 grep -q '^BOT_API_BASE_URL=' .env || printf 'BOT_API_BASE_URL=https://api.telegram.org\n' >> .env
 grep -q '^BOT_API_USE_LOCAL_FILE_URI=' .env || printf 'BOT_API_USE_LOCAL_FILE_URI=false\n' >> .env
 grep -q '^AUTO_COMPRESS=' .env || printf 'AUTO_COMPRESS=true\n' >> .env
@@ -219,6 +221,7 @@ grep -q '^COMPRESS_MIN_VIDEO_KBPS=' .env || printf 'COMPRESS_MIN_VIDEO_KBPS=60\n
 grep -q '^YTDLP_FORCE_IPV4=' .env || printf 'YTDLP_FORCE_IPV4=true\n' >> .env
 grep -q '^YTDLP_HTTP_CHUNK_SIZE=' .env || printf 'YTDLP_HTTP_CHUNK_SIZE=10M\n' >> .env
 grep -q '^YOUTUBE_PLAYER_CLIENTS=' .env || printf 'YOUTUBE_PLAYER_CLIENTS=android,web\n' >> .env
+grep -q '^TELEGRAM_RESOLUTION_MENU=' .env || printf 'TELEGRAM_RESOLUTION_MENU=true\n' >> .env
 if grep -q '^COOKIES_FILE=$' .env; then
   sed -i "s|^COOKIES_FILE=$|COOKIES_FILE=${APP_DIR}/cookies.txt|" .env
 fi
