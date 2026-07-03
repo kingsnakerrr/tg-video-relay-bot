@@ -52,15 +52,33 @@ EOF
 
 menu() {
   clear 2>/dev/null || true
-  current_mode="$(current_upload_mode_label)"
+  if is_local_mode_selected; then
+    public_current="no / 否"
+    local_current="yes / 是"
+  else
+    public_current="yes / 是"
+    local_current="no / 否"
+  fi
   local_status="$(local_api_short_status)"
   cat <<EOF
 Telegram Video Relay / Telegram 视频转发
 
-Current upload mode / 当前上传模式:
-  ${current_mode}
-Local Bot API / 本地 Bot API:
-  ${local_status}
+Upload mode overview / 上传模式概览
+
+1) Public Telegram Bot API / 公网机器人 API
+   Current / 当前正在用: ${public_current}
+   Limit / 上传限制: about 50 MB / 约 50MB
+   Compression / 压缩: AUTO_COMPRESS=true, large files are compressed / 大文件自动压缩
+   Switch / 切换: x public
+
+2) Local Bot API original quality / 本地 Bot API 原画质
+   Current / 当前正在用: ${local_current}
+   Status / 状态: ${local_status}
+   Limit / 上传限制: about 2000 MB / 约 2000MB
+   Compression / 压缩: AUTO_COMPRESS=false, keep original / 不压缩，保留原画质
+   Switch / 切换: x local
+
+Actions / 操作菜单
 
 1) Start / 启动
 2) Stop / Pause / 停止或暂停
@@ -167,28 +185,27 @@ yes_no() {
 
 mode_status() {
   ensure_env_defaults
-  echo "== Current mode / 当前模式 =="
-  current_mode="$(current_upload_mode_label)"
-  echo "${current_mode}"
-  echo
+  if is_local_mode_selected; then
+    public_current="no / 否"
+    local_current="yes / 是"
+  else
+    public_current="yes / 是"
+    local_current="no / 否"
+  fi
 
-  echo "== Public Bot API mode / 公网 Bot API 模式 =="
+  echo "== Upload mode overview / 上传模式概览 =="
+  echo
+  echo "1) Public Telegram Bot API / 公网机器人 API"
   echo "Available / 可用: yes / 是"
-  if is_local_mode_selected; then
-    echo "Current / 当前正在用: no / 否"
-  else
-    echo "Current / 当前正在用: yes / 是"
-  fi
-  echo "Upload limit / 上传限制: about 50 MB, auto-compress recommended / 约 50MB，建议自动压缩"
-  echo "Switch command / 切换命令: x local-api-public"
+  echo "Current / 当前正在用: ${public_current}"
+  echo "Upload limit / 上传限制: about 50 MB / 约 50MB"
+  echo "Compression / 压缩: AUTO_COMPRESS=true, large files are compressed / 大文件自动压缩"
+  echo "Use when / 适合: normal bot upload, most compatible / 普通机器人上传，兼容性最好"
+  echo "Switch command / 切换命令: x public"
   echo
 
-  echo "== Local Bot API original-quality mode / 本地 Bot API 原画质模式 =="
-  if is_local_mode_selected; then
-    echo "Current / 当前正在用: yes / 是"
-  else
-    echo "Current / 当前正在用: no / 否"
-  fi
+  echo "2) Local Bot API original quality / 本地 Bot API 原画质"
+  echo "Current / 当前正在用: ${local_current}"
   printf 'API credentials saved / API ID 和 hash 已保存: '
   [ -f "${LOCAL_API_ENV}" ] && echo "yes / 是" || echo "no / 否"
   printf 'Binary installed / 程序已安装: '
@@ -197,8 +214,10 @@ mode_status() {
   systemctl is-active --quiet "${LOCAL_API_NAME}" 2>/dev/null && echo "yes / 是" || echo "no / 否"
   printf 'Port listening / 端口监听: '
   ss -lnt 2>/dev/null | grep -q ":${LOCAL_API_PORT} " && echo "yes / 是" || echo "no / 否"
-  echo "Upload limit / 上传限制: up to about 2000 MB, no auto-compress / 最高约 2000MB，不自动压缩"
-  echo "Switch command / 切换命令: x local-api-switch"
+  echo "Upload limit / 上传限制: about 2000 MB / 约 2000MB"
+  echo "Compression / 压缩: AUTO_COMPRESS=false, keep original / 不压缩，保留原画质"
+  echo "Use when / 适合: large videos and original quality / 大视频、原画质"
+  echo "Switch command / 切换命令: x local"
   echo
 
   echo "== Current .env upload settings / 当前 .env 上传配置 =="
