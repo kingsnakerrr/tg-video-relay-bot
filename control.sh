@@ -8,6 +8,9 @@ BRANCH="${BRANCH:-main}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
+LOCAL_API_NAME="${LOCAL_API_NAME:-telegram-bot-api}"
+LOCAL_API_ENV="${LOCAL_API_ENV:-/etc/telegram-bot-api.env}"
+LOCAL_API_PORT="${LOCAL_API_PORT:-8081}"
 
 need_root() {
   if [ "$(id -u)" -ne 0 ]; then
@@ -29,9 +32,12 @@ Usage / 用法:
   x status             Show service status / 查看服务状态
   x logs               Follow live logs / 查看实时日志
   x doctor             Diagnose service and submit API / 诊断服务和提交接口
+  x mode               Show upload mode status / 查看上传模式状态
+  x local              Switch to Local Bot API mode / 切换到本地原画质模式
+  x public             Switch to public Bot API mode / 切回公网兼容模式
   x quality            Show original-quality upload settings / 查看原画质上传配置
   x local-api          Install/configure local Bot API server / 安装或配置本地 Bot API
-  x local-api-install-bg Continue install in background / 后台继续安装本地 Bot API
+  x local-api-install-bg Continue low-memory background install / 低内存后台继续安装本地 Bot API
   x fix-env            Add missing default .env keys / 补齐缺少的 .env 默认配置
   x test-submit URL    Submit one URL from the VPS itself / 在 VPS 本机测试提交链接
   x cookies            Sync cookies.txt now / 立即同步 cookies.txt
@@ -46,8 +52,15 @@ EOF
 
 menu() {
   clear 2>/dev/null || true
+  current_mode="$(current_upload_mode_label)"
+  local_status="$(local_api_short_status)"
   cat <<EOF
 Telegram Video Relay / Telegram 视频转发
+
+Current upload mode / 当前上传模式:
+  ${current_mode}
+Local Bot API / 本地 Bot API:
+  ${local_status}
 
 1) Start / 启动
 2) Stop / Pause / 停止或暂停
@@ -55,17 +68,18 @@ Telegram Video Relay / Telegram 视频转发
 4) Status / 状态
 5) Doctor / 诊断
 6) Logs / 日志
-7) Original-quality upload settings / 原画质上传配置
-8) Local Bot API server / 本地 Bot API 服务
-9) Fix missing .env defaults / 补齐缺少的 .env 默认配置
-10) Test submit URL / 测试提交链接
-11) Sync cookies / 同步 cookies
-12) iPhone Shortcut settings / iPhone 快捷指令配置
-13) Edit config / 编辑配置
-14) Update / 更新
-15) Reinstall / 重装
-16) Uninstall service, keep files / 卸载服务但保留文件
-17) Purge everything / 彻底删除
+7) Upload mode status / 上传模式状态
+8) Original-quality upload settings / 原画质上传配置
+9) Local Bot API server / 本地 Bot API 服务
+10) Fix missing .env defaults / 补齐缺少的 .env 默认配置
+11) Test submit URL / 测试提交链接
+12) Sync cookies / 同步 cookies
+13) iPhone Shortcut settings / iPhone 快捷指令配置
+14) Edit config / 编辑配置
+15) Update / 更新
+16) Reinstall / 重装
+17) Uninstall service, keep files / 卸载服务但保留文件
+18) Purge everything / 彻底删除
 0) Exit / 退出
 EOF
   echo
@@ -77,17 +91,18 @@ EOF
     4) run status ;;
     5) run doctor ;;
     6) run logs ;;
-    7) run quality ;;
-    8) run local-api ;;
-    9) run fix-env ;;
-    10) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
-    11) run cookies ;;
-    12) run shortcut ;;
-    13) run env ;;
-    14) run update ;;
-    15) run reinstall ;;
-    16) run uninstall ;;
-    17) run purge ;;
+    7) run mode ;;
+    8) run quality ;;
+    9) run local-api ;;
+    10) run fix-env ;;
+    11) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
+    12) run cookies ;;
+    13) run shortcut ;;
+    14) run env ;;
+    15) run update ;;
+    16) run reinstall ;;
+    17) run uninstall ;;
+    18) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice. / 选择无效。"; exit 1 ;;
   esac
@@ -110,6 +125,87 @@ env_value() {
     return
   fi
   grep -E "^${key}=" "${APP_DIR}/.env" | tail -n 1 | cut -d= -f2-
+}
+
+is_local_mode_selected() {
+  base_url="$(env_value BOT_API_BASE_URL)"
+  local_file_uri="$(env_value BOT_API_USE_LOCAL_FILE_URI)"
+  [ "${local_file_uri}" = "true" ] || [ "${base_url}" = "http://127.0.0.1:${LOCAL_API_PORT}" ]
+}
+
+current_upload_mode_label() {
+  if [ ! -f "${APP_DIR}/.env" ]; then
+    echo "unknown, .env missing / 未知，找不到 .env"
+    return
+  fi
+  if is_local_mode_selected; then
+    echo "Local Bot API original-quality mode / 本地 Bot API 原画质模式"
+  else
+    echo "Public Bot API compatibility mode / 公网 Bot API 兼容模式"
+  fi
+}
+
+local_api_short_status() {
+  if systemctl is-active --quiet "${LOCAL_API_NAME}" 2>/dev/null; then
+    echo "service active / 服务运行中"
+  elif [ -x /usr/local/bin/telegram-bot-api ]; then
+    echo "installed, service not active / 已安装，服务未运行"
+  elif [ -f "${LOCAL_API_ENV}" ]; then
+    echo "credentials saved, server not installed / 已保存参数，服务未安装"
+  else
+    echo "not configured / 未配置"
+  fi
+}
+
+yes_no() {
+  if "$@"; then
+    echo "yes / 是"
+  else
+    echo "no / 否"
+  fi
+}
+
+mode_status() {
+  ensure_env_defaults
+  echo "== Current mode / 当前模式 =="
+  current_mode="$(current_upload_mode_label)"
+  echo "${current_mode}"
+  echo
+
+  echo "== Public Bot API mode / 公网 Bot API 模式 =="
+  echo "Available / 可用: yes / 是"
+  if is_local_mode_selected; then
+    echo "Current / 当前正在用: no / 否"
+  else
+    echo "Current / 当前正在用: yes / 是"
+  fi
+  echo "Upload limit / 上传限制: about 50 MB, auto-compress recommended / 约 50MB，建议自动压缩"
+  echo "Switch command / 切换命令: x local-api-public"
+  echo
+
+  echo "== Local Bot API original-quality mode / 本地 Bot API 原画质模式 =="
+  if is_local_mode_selected; then
+    echo "Current / 当前正在用: yes / 是"
+  else
+    echo "Current / 当前正在用: no / 否"
+  fi
+  printf 'API credentials saved / API ID 和 hash 已保存: '
+  [ -f "${LOCAL_API_ENV}" ] && echo "yes / 是" || echo "no / 否"
+  printf 'Binary installed / 程序已安装: '
+  [ -x /usr/local/bin/telegram-bot-api ] && echo "yes / 是" || echo "no / 否"
+  printf 'Service active / 服务运行中: '
+  systemctl is-active --quiet "${LOCAL_API_NAME}" 2>/dev/null && echo "yes / 是" || echo "no / 否"
+  printf 'Port listening / 端口监听: '
+  ss -lnt 2>/dev/null | grep -q ":${LOCAL_API_PORT} " && echo "yes / 是" || echo "no / 否"
+  echo "Upload limit / 上传限制: up to about 2000 MB, no auto-compress / 最高约 2000MB，不自动压缩"
+  echo "Switch command / 切换命令: x local-api-switch"
+  echo
+
+  echo "== Current .env upload settings / 当前 .env 上传配置 =="
+  printf 'BOT_API_BASE_URL=%s\n' "$(env_value BOT_API_BASE_URL)"
+  printf 'BOT_API_USE_LOCAL_FILE_URI=%s\n' "$(env_value BOT_API_USE_LOCAL_FILE_URI)"
+  printf 'MAX_UPLOAD_MB=%s\n' "$(env_value MAX_UPLOAD_MB)"
+  printf 'AUTO_COMPRESS=%s\n' "$(env_value AUTO_COMPRESS)"
 }
 
 generate_secret() {
@@ -179,6 +275,10 @@ run() {
     status)
       systemctl status "${APP_NAME}" --no-pager
       ;;
+    mode|modes)
+      need_root
+      mode_status
+      ;;
     doctor)
       need_root
       ensure_env_defaults
@@ -223,13 +323,7 @@ run() {
     quality)
       env_file="${APP_DIR}/.env"
       [ -f "${env_file}" ] || { echo "${env_file} not found."; exit 1; }
-      ensure_upload_env
-      echo "== Current upload settings / 当前上传配置 =="
-      printf 'BOT_API_BASE_URL=%s\n' "$(env_value BOT_API_BASE_URL)"
-      printf 'BOT_API_USE_LOCAL_FILE_URI=%s\n' "$(env_value BOT_API_USE_LOCAL_FILE_URI)"
-      printf 'MAX_UPLOAD_MB=%s\n' "$(env_value MAX_UPLOAD_MB)"
-      printf 'AUTO_COMPRESS=%s\n' "$(env_value AUTO_COMPRESS)"
-      printf 'UPLOAD_MODE=%s\n' "$(env_value UPLOAD_MODE)"
+      mode_status
       echo
       echo "Public Telegram Bot API mode / 公网 Bot API 模式:"
       echo "  MAX_UPLOAD_MB=49"
@@ -273,6 +367,10 @@ run() {
       need_root
       bash "${APP_DIR}/install_local_bot_api.sh" switch
       ;;
+    local)
+      need_root
+      bash "${APP_DIR}/install_local_bot_api.sh" switch
+      ;;
     local-api-status)
       need_root
       bash "${APP_DIR}/install_local_bot_api.sh" status
@@ -282,6 +380,10 @@ run() {
       bash "${APP_DIR}/install_local_bot_api.sh" logs
       ;;
     local-api-public|local-api-disable)
+      need_root
+      bash "${APP_DIR}/install_local_bot_api.sh" public
+      ;;
+    public)
       need_root
       bash "${APP_DIR}/install_local_bot_api.sh" public
       ;;

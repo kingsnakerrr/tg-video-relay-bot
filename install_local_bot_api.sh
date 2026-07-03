@@ -11,8 +11,10 @@ LOCAL_API_ENV="${LOCAL_API_ENV:-/etc/telegram-bot-api.env}"
 LOCAL_API_SERVICE="/etc/systemd/system/${LOCAL_API_NAME}.service"
 LOCAL_API_HOST="${LOCAL_API_HOST:-127.0.0.1}"
 LOCAL_API_PORT="${LOCAL_API_PORT:-8081}"
-BUILD_JOBS="${BUILD_JOBS:-2}"
+BUILD_JOBS="${BUILD_JOBS:-1}"
 INSTALL_LOG="${INSTALL_LOG:-/var/log/tg-video-relay-local-api-install.log}"
+SWAP_FILE="${SWAP_FILE:-/swapfile-tg-video-relay}"
+SWAP_SIZE="${SWAP_SIZE:-4G}"
 
 need_root() {
   if [ "$(id -u)" -ne 0 ]; then
@@ -90,6 +92,34 @@ install_packages() {
   fi
 }
 
+ensure_swap() {
+  step "Ensuring swap for low-memory VPS / 为小内存 VPS 准备 swap"
+  if swapon --noheadings --show=NAME 2>/dev/null | grep -qx "${SWAP_FILE}"; then
+    echo "Swap already active / swap 已启用: ${SWAP_FILE}"
+    return
+  fi
+
+  if [ ! -f "${SWAP_FILE}" ]; then
+    echo "Creating ${SWAP_SIZE} swap file / 正在创建 ${SWAP_SIZE} swap 文件: ${SWAP_FILE}"
+    fallocate -l "${SWAP_SIZE}" "${SWAP_FILE}" 2>/dev/null || dd if=/dev/zero of="${SWAP_FILE}" bs=1M count=4096 status=progress
+  fi
+
+  chmod 600 "${SWAP_FILE}"
+  mkswap "${SWAP_FILE}" >/dev/null 2>&1 || true
+  swapon "${SWAP_FILE}" 2>/dev/null || true
+
+  if ! swapon --noheadings --show=NAME 2>/dev/null | grep -qx "${SWAP_FILE}"; then
+    echo "WARNING: Could not enable swap. Build may fail on low-memory VPS."
+    echo "警告: 无法启用 swap，小内存 VPS 编译可能失败。"
+    return
+  fi
+
+  if ! grep -q "^${SWAP_FILE} " /etc/fstab 2>/dev/null; then
+    printf '%s none swap sw 0 0\n' "${SWAP_FILE}" >> /etc/fstab
+  fi
+  free -h || true
+}
+
 build_local_api() {
   step "Downloading Telegram Local Bot API Server / 下载 Telegram 本地 Bot API 服务"
   if [ -d "${LOCAL_API_SRC}/.git" ]; then
@@ -102,6 +132,7 @@ build_local_api() {
   fi
 
   step "Building telegram-bot-api / 编译 telegram-bot-api"
+  echo "Build jobs / 编译线程: ${BUILD_JOBS}"
   mkdir -p "${LOCAL_API_BUILD}"
   cmake -S "${LOCAL_API_SRC}" -B "${LOCAL_API_BUILD}" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local
   cmake --build "${LOCAL_API_BUILD}" --target install -j"${BUILD_JOBS}"
@@ -235,6 +266,7 @@ EOF
 
 install_all() {
   install_packages
+  ensure_swap
   write_local_env
   build_local_api
   write_service
@@ -251,6 +283,7 @@ install_without_prompt() {
     exit 1
   }
   install_packages
+  ensure_swap
   build_local_api
   write_service
   start_local_api

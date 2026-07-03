@@ -17,6 +17,9 @@ x pause       # 暂停/停止
 x restart     # 重启
 x status      # 查看状态
 x doctor      # 诊断服务和 8787 接口
+x mode        # 查看当前上传模式和两个模式状态
+x local       # 切到本地 Bot API 原画质模式
+x public      # 切回公网 Bot API 兼容模式
 x test-submit "https://x.com/..." # 从 VPS 本地测试提交
 x logs        # 实时日志
 x local-api   # 安装/配置 Local Bot API Server

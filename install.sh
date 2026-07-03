@@ -9,7 +9,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-03.3"
+INSTALLER_VERSION="2026-07-03.6"
 
 die() {
   echo "ERROR: $*" >&2
@@ -148,10 +148,29 @@ if [ ! -f .env ]; then
   echo "  Telegram Bot Token / Telegram 机器人 Token"
   echo "  Target channel/group IDs / 目标频道或群组 ID，多个用英文逗号分隔"
   echo "  Admin Telegram user IDs / 管理员 Telegram 用户 ID，多个用英文逗号分隔"
+  echo "  Optional Local Bot API credentials / 可选本地 Bot API 的 api_id 和 api_hash"
+  echo "Default mode is Public Bot API. You can switch later with x local-api-switch."
+  echo "默认先使用公网 Bot API 模式，Local Bot API 安装成功后可用 x local-api-switch 切换。"
   echo
   BOT_TOKEN="$(ask_required "Telegram Bot Token / Telegram 机器人 Token")"
   TARGET_CHAT_IDS="$(ask_required "Target channel/group IDs, comma separated / 目标频道或群组 ID，多个用英文逗号分隔")"
   ALLOWED_USER_IDS="$(ask_required "Admin Telegram user IDs, comma separated / 管理员 Telegram 用户 ID，多个用英文逗号分隔")"
+  read -r -p "Optional Local Bot API ID, press Enter to skip / 可选 Local Bot API ID，回车跳过: " LOCAL_API_ID
+  if [ -n "${LOCAL_API_ID}" ]; then
+    read -r -s -p "Optional Local Bot API hash / 可选 Local Bot API hash: " LOCAL_API_HASH
+    echo
+    if [ -n "${LOCAL_API_HASH}" ]; then
+      cat > /etc/telegram-bot-api.env <<EOF_LOCAL_API_ENV
+TELEGRAM_API_ID=${LOCAL_API_ID}
+TELEGRAM_API_HASH=${LOCAL_API_HASH}
+EOF_LOCAL_API_ENV
+      chmod 600 /etc/telegram-bot-api.env
+      echo "Saved Local Bot API credentials to /etc/telegram-bot-api.env"
+      echo "已保存 Local Bot API 参数到 /etc/telegram-bot-api.env"
+    else
+      echo "Local Bot API hash empty, skipped. / Local Bot API hash 为空，已跳过。"
+    fi
+  fi
   SUBMIT_API_SECRET="$(generate_secret)"
 
   cat > .env <<EOF_ENV
