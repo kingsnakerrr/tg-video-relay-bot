@@ -9,7 +9,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-03.1"
+INSTALLER_VERSION="2026-07-03.3"
 
 die() {
   echo "ERROR: $*" >&2
@@ -48,47 +48,49 @@ generate_secret() {
 }
 
 if [ "$(id -u)" -ne 0 ]; then
-  die "Please run as root, for example: sudo bash install.sh"
+  die "Please run as root / 请用 root 运行，例如: sudo bash install.sh"
 fi
 
-echo "Telegram Video Relay installer ${INSTALLER_VERSION}"
+echo "Telegram Video Relay installer ${INSTALLER_VERSION} / Telegram 视频转发机器人安装器 ${INSTALLER_VERSION}"
 
 case "${1:-}" in
   uninstall)
-    step "Uninstalling service"
+    step "Uninstalling service / 卸载服务"
     systemctl stop "${APP_NAME}" 2>/dev/null || true
     systemctl disable "${APP_NAME}" 2>/dev/null || true
     rm -f "${SERVICE_FILE}" "${CONTROL_BIN}" "${ALT_CONTROL_BIN}"
     systemctl daemon-reload
     systemctl reset-failed "${APP_NAME}" 2>/dev/null || true
     echo "Uninstalled service. Kept app files: ${APP_DIR}"
+    echo "已卸载服务，保留程序文件: ${APP_DIR}"
     exit 0
     ;;
   purge)
     if [ "${2:-}" != "--yes" ]; then
       echo "This will stop the bot and delete ${APP_DIR}."
-      read -r -p "Type DELETE to continue: " answer
-      [ "${answer}" = "DELETE" ] || { echo "Cancelled."; exit 1; }
+      echo "这会停止机器人并删除 ${APP_DIR}。"
+      read -r -p "Type DELETE to continue / 输入 DELETE 继续: " answer
+      [ "${answer}" = "DELETE" ] || { echo "Cancelled. / 已取消。"; exit 1; }
     fi
-    step "Purging install"
+    step "Purging install / 彻底删除安装"
     systemctl stop "${APP_NAME}" 2>/dev/null || true
     systemctl disable "${APP_NAME}" 2>/dev/null || true
     rm -f "${SERVICE_FILE}" "${CONTROL_BIN}" "${ALT_CONTROL_BIN}"
     rm -rf "${APP_DIR}"
     systemctl daemon-reload
     systemctl reset-failed "${APP_NAME}" 2>/dev/null || true
-    echo "Purged ${APP_NAME}."
+    echo "Purged ${APP_NAME}. / 已彻底删除 ${APP_NAME}。"
     exit 0
     ;;
 esac
 
-step "Installing system packages"
+step "Installing system packages / 安装系统依赖"
 if command -v apt >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
   apt update
   apt install -y git curl ca-certificates python3 python3-venv python3-pip ffmpeg
 else
-  die "This installer currently supports Debian/Ubuntu with apt."
+  die "This installer currently supports Debian/Ubuntu with apt. / 当前脚本只支持 Debian/Ubuntu apt 系统。"
 fi
 
 SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
@@ -97,13 +99,13 @@ if [ -n "${SCRIPT_SOURCE}" ] && [ -f "${SCRIPT_SOURCE}" ]; then
   SCRIPT_DIR="$(cd "$(dirname "${SCRIPT_SOURCE}")" && pwd)"
 fi
 
-step "Preparing app directory: ${APP_DIR}"
+step "Preparing app directory / 准备程序目录: ${APP_DIR}"
 mkdir -p "$(dirname "${APP_DIR}")"
 
 if [ -n "${SCRIPT_DIR}" ] && has_project_files "${SCRIPT_DIR}"; then
   mkdir -p "${APP_DIR}"
   if [ "${SCRIPT_DIR}" != "${APP_DIR}" ]; then
-    step "Copying local project files"
+    step "Copying local project files / 复制本地项目文件"
     tar \
       --exclude='./.env' \
       --exclude='./downloads' \
@@ -112,39 +114,44 @@ if [ -n "${SCRIPT_DIR}" ] && has_project_files "${SCRIPT_DIR}"; then
       -C "${SCRIPT_DIR}" -cf - . | tar -C "${APP_DIR}" -xf -
   fi
 elif [ -d "${APP_DIR}/.git" ]; then
-  step "Updating existing GitHub checkout"
+  step "Updating existing GitHub checkout / 更新现有 GitHub 项目"
   git -C "${APP_DIR}" fetch origin "${BRANCH}"
   git -C "${APP_DIR}" checkout "${BRANCH}"
   git -C "${APP_DIR}" pull --ff-only origin "${BRANCH}"
 elif dir_is_not_empty "${APP_DIR}"; then
   if has_project_files "${APP_DIR}"; then
-    step "Using existing project files"
+    step "Using existing project files / 使用现有项目文件"
   else
     BACKUP_DIR="${APP_DIR}.backup.$(date +%Y%m%d%H%M%S)"
-    step "${APP_DIR} exists but is not a valid install. Moving it to ${BACKUP_DIR}"
+    step "${APP_DIR} exists but is not a valid install. Moving it to ${BACKUP_DIR} / ${APP_DIR} 已存在但不是有效安装，移动到 ${BACKUP_DIR}"
     mv "${APP_DIR}" "${BACKUP_DIR}"
-    step "Cloning project from GitHub"
+    step "Cloning project from GitHub / 从 GitHub 克隆项目"
     git clone --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}"
   fi
 else
-  step "Cloning project from GitHub"
+  step "Cloning project from GitHub / 从 GitHub 克隆项目"
   git clone --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}"
 fi
 
 cd "${APP_DIR}"
-has_project_files "${APP_DIR}" || die "Project files were not found in ${APP_DIR}."
+has_project_files "${APP_DIR}" || die "Project files were not found in ${APP_DIR}. / ${APP_DIR} 中没有找到项目文件。"
 
-step "Creating Python virtual environment"
+step "Creating Python virtual environment / 创建 Python 虚拟环境"
 "${PYTHON_BIN}" -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
 if [ ! -f .env ]; then
-  step "Creating .env"
-  BOT_TOKEN="$(ask_required "Telegram Bot Token")"
-  TARGET_CHAT_IDS="$(ask_required "Target channel/group IDs, comma separated")"
-  ALLOWED_USER_IDS="$(ask_required "Admin Telegram user IDs, comma separated")"
+  step "Creating .env / 创建配置文件 .env"
+  echo "First-time setup inputs / 首次安装需要输入:"
+  echo "  Telegram Bot Token / Telegram 机器人 Token"
+  echo "  Target channel/group IDs / 目标频道或群组 ID，多个用英文逗号分隔"
+  echo "  Admin Telegram user IDs / 管理员 Telegram 用户 ID，多个用英文逗号分隔"
+  echo
+  BOT_TOKEN="$(ask_required "Telegram Bot Token / Telegram 机器人 Token")"
+  TARGET_CHAT_IDS="$(ask_required "Target channel/group IDs, comma separated / 目标频道或群组 ID，多个用英文逗号分隔")"
+  ALLOWED_USER_IDS="$(ask_required "Admin Telegram user IDs, comma separated / 管理员 Telegram 用户 ID，多个用英文逗号分隔")"
   SUBMIT_API_SECRET="$(generate_secret)"
 
   cat > .env <<EOF_ENV
@@ -177,7 +184,7 @@ SUBMIT_API_SECRET=${SUBMIT_API_SECRET}
 SUBMIT_NOTIFY_CHAT_ID=
 EOF_ENV
 else
-  step "Existing .env found, keeping it"
+  step "Existing .env found, keeping it / 已找到现有 .env，保留不覆盖"
 fi
 
 grep -q '^MAX_UPLOAD_MB=' .env || printf '\nMAX_UPLOAD_MB=49\n' >> .env
@@ -208,7 +215,7 @@ if [ -f "${APP_DIR}/cookies.txt" ]; then
   chmod 600 "${APP_DIR}/cookies.txt"
 fi
 
-step "Writing systemd service"
+step "Writing systemd service / 写入 systemd 服务"
 cat > "${SERVICE_FILE}" <<EOF_SERVICE
 [Unit]
 Description=Telegram Video Relay Bot
@@ -228,26 +235,27 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF_SERVICE
 
-step "Installing control command"
+step "Installing control command / 安装控制命令"
 if [ -f "${APP_DIR}/control.sh" ]; then
   install -m 755 "${APP_DIR}/control.sh" "${CONTROL_BIN}"
   install -m 755 "${APP_DIR}/control.sh" "${ALT_CONTROL_BIN}"
 else
   echo "WARNING: control.sh not found; skipping ${CONTROL_BIN}"
+  echo "警告: 找不到 control.sh，跳过 ${CONTROL_BIN}"
 fi
 
-step "Starting service"
+step "Starting service / 启动服务"
 systemctl daemon-reload
 systemctl enable --now "${APP_NAME}"
 
 echo
-echo "Installed successfully."
-echo "App dir: ${APP_DIR}"
-echo "Menu:    x"
-echo "Status:  x status"
-echo "Logs:    x logs"
-echo "Stop:    x stop"
-echo "Start:   x start"
-echo "Shortcut:x shortcut"
-echo "Remove:  x uninstall"
-echo "Update:  bash <(curl -fsSL https://raw.githubusercontent.com/kingsnakerrr/tg-video-relay-bot/main/install.sh)"
+echo "Installed successfully. / 安装成功。"
+echo "App dir / 程序目录: ${APP_DIR}"
+echo "Menu / 菜单:        x"
+echo "Status / 状态:      x status"
+echo "Logs / 日志:        x logs"
+echo "Stop / 停止:        x stop"
+echo "Start / 启动:       x start"
+echo "Shortcut / 快捷指令:x shortcut"
+echo "Remove / 卸载:      x uninstall"
+echo "Update / 更新:      bash <(curl -fsSL https://raw.githubusercontent.com/kingsnakerrr/tg-video-relay-bot/main/install.sh)"

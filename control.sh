@@ -11,64 +11,65 @@ ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
 
 need_root() {
   if [ "$(id -u)" -ne 0 ]; then
-    echo "Please run as root."
+    echo "Please run as root. / 请用 root 运行。"
     exit 1
   fi
 }
 
 usage() {
   cat <<EOF
-Telegram Video Relay control
+Telegram Video Relay control / Telegram 视频转发控制命令
 
-Usage:
-  x                    Open menu
-  x start              Start the bot
-  x stop               Stop/pause the bot
-  x pause              Same as stop
-  x restart            Restart the bot
-  x status             Show service status
-  x logs               Follow live logs
-  x doctor             Diagnose service and submit API
-  x quality            Show original-quality upload settings
-  x local-api          Install/configure local Bot API server
-  x fix-env            Add missing default .env keys
-  x test-submit URL    Submit one URL from the VPS itself
-  x cookies            Sync cookies.txt now
-  x shortcut           Show iPhone Shortcut submit settings
-  x env                Edit .env config
-  x update             Pull latest code and restart
-  x reinstall          Run install.sh again
-  x uninstall          Remove service, keep app files and .env
-  x purge              Remove service and delete app directory
+Usage / 用法:
+  x                    Open menu / 打开菜单
+  x start              Start the bot / 启动机器人
+  x stop               Stop/pause the bot / 停止或暂停机器人
+  x pause              Same as stop / 同 stop
+  x restart            Restart the bot / 重启机器人
+  x status             Show service status / 查看服务状态
+  x logs               Follow live logs / 查看实时日志
+  x doctor             Diagnose service and submit API / 诊断服务和提交接口
+  x quality            Show original-quality upload settings / 查看原画质上传配置
+  x local-api          Install/configure local Bot API server / 安装或配置本地 Bot API
+  x local-api-install-bg Continue install in background / 后台继续安装本地 Bot API
+  x fix-env            Add missing default .env keys / 补齐缺少的 .env 默认配置
+  x test-submit URL    Submit one URL from the VPS itself / 在 VPS 本机测试提交链接
+  x cookies            Sync cookies.txt now / 立即同步 cookies.txt
+  x shortcut           Show iPhone Shortcut submit settings / 查看 iPhone 快捷指令配置
+  x env                Edit .env config / 编辑 .env 配置
+  x update             Pull latest code and restart / 更新代码并重启
+  x reinstall          Run install.sh again / 重新执行安装脚本
+  x uninstall          Remove service, keep app files and .env / 卸载服务，保留程序和 .env
+  x purge              Remove service and delete app directory / 彻底删除服务和程序目录
 EOF
 }
 
 menu() {
   clear 2>/dev/null || true
   cat <<EOF
-Telegram Video Relay
+Telegram Video Relay / Telegram 视频转发
 
-1) Start
-2) Stop / Pause
-3) Restart
-4) Status
-5) Doctor
-6) Logs
-7) Original-quality upload settings
-8) Local Bot API server
-9) Fix missing .env defaults
-10) Test submit URL
-11) Sync cookies
-12) iPhone Shortcut settings
-13) Edit config
-14) Update
-15) Reinstall
-16) Uninstall service, keep files
-17) Purge everything
-0) Exit
+1) Start / 启动
+2) Stop / Pause / 停止或暂停
+3) Restart / 重启
+4) Status / 状态
+5) Doctor / 诊断
+6) Logs / 日志
+7) Original-quality upload settings / 原画质上传配置
+8) Local Bot API server / 本地 Bot API 服务
+9) Fix missing .env defaults / 补齐缺少的 .env 默认配置
+10) Test submit URL / 测试提交链接
+11) Sync cookies / 同步 cookies
+12) iPhone Shortcut settings / iPhone 快捷指令配置
+13) Edit config / 编辑配置
+14) Update / 更新
+15) Reinstall / 重装
+16) Uninstall service, keep files / 卸载服务但保留文件
+17) Purge everything / 彻底删除
+0) Exit / 退出
 EOF
   echo
-  read -r -p "Choose: " choice
+  read -r -p "Choose / 请选择: " choice
   case "${choice}" in
     1) run start ;;
     2) run stop ;;
@@ -88,7 +89,7 @@ EOF
     16) run uninstall ;;
     17) run purge ;;
     0|q|Q) exit 0 ;;
-    *) echo "Invalid choice."; exit 1 ;;
+    *) echo "Invalid choice. / 选择无效。"; exit 1 ;;
   esac
 }
 
@@ -167,7 +168,7 @@ run() {
     stop|pause)
       need_root
       systemctl stop "${APP_NAME}"
-      echo "Stopped ${APP_NAME}."
+      echo "Stopped ${APP_NAME}. / 已停止 ${APP_NAME}。"
       ;;
     restart)
       need_root
@@ -185,36 +186,36 @@ run() {
       enabled="$(env_value SUBMIT_API_ENABLED)"
       secret="$(env_value SUBMIT_API_SECRET)"
       [ -n "${port}" ] || port="8787"
-      echo "== Version =="
+      echo "== Version / 版本 =="
       grep 'INSTALLER_VERSION=' "${APP_DIR}/install.sh" 2>/dev/null || echo "install.sh not found"
       echo
-      echo "== Submit API .env =="
+      echo "== Submit API .env / 提交接口配置 =="
       printf 'SUBMIT_API_ENABLED=%s\n' "${enabled:-}"
       printf 'SUBMIT_API_PORT=%s\n' "${port}"
       if [ -n "${secret}" ]; then
-        echo "SUBMIT_API_SECRET=set"
+        echo "SUBMIT_API_SECRET=set / 已设置"
       else
-        echo "SUBMIT_API_SECRET=missing"
+        echo "SUBMIT_API_SECRET=missing / 缺失"
       fi
       echo
-      echo "== Upload API .env =="
+      echo "== Upload API .env / 上传接口配置 =="
       printf 'BOT_API_BASE_URL=%s\n' "$(env_value BOT_API_BASE_URL)"
       printf 'BOT_API_USE_LOCAL_FILE_URI=%s\n' "$(env_value BOT_API_USE_LOCAL_FILE_URI)"
       printf 'MAX_UPLOAD_MB=%s\n' "$(env_value MAX_UPLOAD_MB)"
       printf 'AUTO_COMPRESS=%s\n' "$(env_value AUTO_COMPRESS)"
       echo
-      echo "== Service =="
+      echo "== Service / 服务 =="
       systemctl is-active "${APP_NAME}" || true
       systemctl status "${APP_NAME}" --no-pager -n 5 || true
       echo
-      echo "== Listening port =="
-      ss -lntp 2>/dev/null | grep ":${port} " || echo "Not listening on ${port}"
+      echo "== Listening port / 监听端口 =="
+      ss -lntp 2>/dev/null | grep ":${port} " || echo "Not listening on ${port} / 未监听 ${port}"
       echo
-      echo "== Local health =="
-      curl -fsS "http://127.0.0.1:${port}/health" || echo "Health check failed"
+      echo "== Local health / 本地健康检查 =="
+      curl -fsS "http://127.0.0.1:${port}/health" || echo "Health check failed / 健康检查失败"
       echo
       echo
-      echo "If the port is not listening, run:"
+      echo "If the port is not listening, run / 如果端口没有监听，执行:"
       echo "  x update"
       echo "  x restart"
       echo "  x logs"
@@ -223,33 +224,34 @@ run() {
       env_file="${APP_DIR}/.env"
       [ -f "${env_file}" ] || { echo "${env_file} not found."; exit 1; }
       ensure_upload_env
-      echo "== Current upload settings =="
+      echo "== Current upload settings / 当前上传配置 =="
       printf 'BOT_API_BASE_URL=%s\n' "$(env_value BOT_API_BASE_URL)"
       printf 'BOT_API_USE_LOCAL_FILE_URI=%s\n' "$(env_value BOT_API_USE_LOCAL_FILE_URI)"
       printf 'MAX_UPLOAD_MB=%s\n' "$(env_value MAX_UPLOAD_MB)"
       printf 'AUTO_COMPRESS=%s\n' "$(env_value AUTO_COMPRESS)"
       printf 'UPLOAD_MODE=%s\n' "$(env_value UPLOAD_MODE)"
       echo
-      echo "Public Telegram Bot API mode:"
+      echo "Public Telegram Bot API mode / 公网 Bot API 模式:"
       echo "  MAX_UPLOAD_MB=49"
       echo "  AUTO_COMPRESS=true"
       echo
       echo "Original-quality large upload mode requires telegram-bot-api running on this VPS."
-      echo "After it is running locally, set these in x env:"
+      echo "原画质大文件模式需要 VPS 上运行 telegram-bot-api。"
+      echo "After it is running locally, set these in x env / 本地服务运行后，在 x env 里设置:"
       echo "  BOT_API_BASE_URL=http://127.0.0.1:8081"
       echo "  BOT_API_USE_LOCAL_FILE_URI=true"
       echo "  MAX_UPLOAD_MB=1900"
       echo "  AUTO_COMPRESS=false"
       echo
-      echo "Then run: x restart"
-      echo "See: LOCAL_BOT_API.md"
+      echo "Then run / 然后执行: x restart"
+      echo "See / 说明文档: LOCAL_BOT_API.md"
       ;;
     fix-env)
       need_root
       ensure_env_defaults
-      echo "Missing default .env keys have been added."
-      echo "Check with: x quality"
-      echo "Restart with: x restart"
+      echo "Missing default .env keys have been added. / 已补齐缺少的 .env 默认配置。"
+      echo "Check with / 检查: x quality"
+      echo "Restart with / 重启: x restart"
       ;;
     local-api)
       need_root
@@ -258,6 +260,14 @@ run() {
     local-api-install)
       need_root
       bash "${APP_DIR}/install_local_bot_api.sh" install
+      ;;
+    local-api-install-bg|local-api-background)
+      need_root
+      bash "${APP_DIR}/install_local_bot_api.sh" install-bg
+      ;;
+    local-api-install-log)
+      need_root
+      bash "${APP_DIR}/install_local_bot_api.sh" install-log
       ;;
     local-api-switch|local-api-enable)
       need_root
@@ -286,14 +296,14 @@ run() {
       url="${2:-}"
       [ -n "${port}" ] || port="8787"
       if [ -z "${url}" ]; then
-        echo "Usage: x test-submit 'https://x.com/.../status/...'"
+        echo "Usage / 用法: x test-submit 'https://x.com/.../status/...'"
         exit 1
       fi
       curl -fsS -G "http://127.0.0.1:${port}/submit" \
         --data-urlencode "secret=${secret}" \
         --data-urlencode "url=${url}"
       echo
-      echo "Queued. Watch logs with: x logs"
+      echo "Queued. Watch logs with: x logs / 已加入队列，用 x logs 查看日志。"
       ;;
     cookies|cookie|sync-cookies)
       need_root
@@ -309,28 +319,30 @@ run() {
       host_hint="$(hostname -I 2>/dev/null | awk '{print $1}')"
       [ -n "${port}" ] || port="8787"
       [ -n "${host_hint}" ] || host_hint="YOUR_VPS_IP_OR_DOMAIN"
-      echo "Submit API enabled: ${enabled:-unknown}"
-      echo "Shortcut URL:"
+      echo "Submit API enabled / 提交接口启用: ${enabled:-unknown}"
+      echo "Shortcut URL / 快捷指令 URL:"
       echo "  http://${host_hint}:${port}/submit"
       echo
-      echo "Shortcut form fields:"
+      echo "Shortcut form fields / 快捷指令表单字段:"
       echo "  secret = ${secret}"
       echo "  url    = Shortcut Input URL"
       echo
-      echo "Local test:"
+      echo "Local test / 本地测试:"
       echo "  curl -G 'http://127.0.0.1:${port}/submit' --data-urlencode 'secret=${secret}' --data-urlencode 'url=https://x.com/example/status/123'"
       echo
       echo "For iPhone outside your VPS, open TCP port ${port} or use HTTPS reverse proxy."
+      echo "如果 iPhone 不在 VPS 本机，需要放行 TCP ${port} 或使用 HTTPS 反向代理。"
       ;;
     env|config)
       need_root
       "${EDITOR:-nano}" "${APP_DIR}/.env"
-      echo "Saved. Run: x restart"
+      echo "Saved. Run: x restart / 已保存，执行 x restart 重启。"
       ;;
     update)
       need_root
       if [ ! -d "${APP_DIR}/.git" ]; then
         echo "${APP_DIR} is not a Git checkout. Reinstall with install.sh."
+        echo "${APP_DIR} 不是 Git 项目，请用 install.sh 重新安装。"
         exit 1
       fi
       git -C "${APP_DIR}" fetch origin "${BRANCH}"
@@ -350,22 +362,23 @@ run() {
       stop_service
       remove_service
       rm -f "${CONTROL_BIN}" "${ALT_CONTROL_BIN}"
-      echo "Uninstalled service and control command."
-      echo "Kept app files and config: ${APP_DIR}"
+      echo "Uninstalled service and control command. / 已卸载服务和控制命令。"
+      echo "Kept app files and config / 保留程序和配置: ${APP_DIR}"
       ;;
     purge)
       need_root
       confirm="${2:-}"
       if [ "${confirm}" != "--yes" ]; then
         echo "This will stop the bot and delete ${APP_DIR}."
-        read -r -p "Type DELETE to continue: " answer
-        [ "${answer}" = "DELETE" ] || { echo "Cancelled."; exit 1; }
+        echo "这会停止机器人并删除 ${APP_DIR}。"
+        read -r -p "Type DELETE to continue / 输入 DELETE 继续: " answer
+        [ "${answer}" = "DELETE" ] || { echo "Cancelled. / 已取消。"; exit 1; }
       fi
       stop_service
       remove_service
       rm -f "${CONTROL_BIN}" "${ALT_CONTROL_BIN}"
       rm -rf "${APP_DIR}"
-      echo "Purged ${APP_NAME}."
+      echo "Purged ${APP_NAME}. / 已彻底删除 ${APP_NAME}。"
       ;;
     reinstall)
       need_root
@@ -379,7 +392,7 @@ run() {
       usage
       ;;
     *)
-      echo "Unknown command: ${cmd}"
+      echo "Unknown command: ${cmd} / 未知命令: ${cmd}"
       usage
       exit 1
       ;;
