@@ -7,7 +7,57 @@
 1. 推荐：官方 Local Bot API Server。机器人还是机器人，但上传走 VPS 本机的 Bot API 服务，可以上传 2 GB 左右文件，并且可以让 Bot API 直接读取 VPS 本地视频文件。
 2. 不推荐：用户号/MTProto 上传。这个需要用你的 Telegram 账号登录，维护会话，安全和风控风险更高，代码也要换成 Telethon/Pyrogram 这一类方案。
 
-## 项目已支持的配置
+## 一键菜单安装
+
+升级到新版项目后，执行：
+
+```bash
+x update
+x local-api
+```
+
+菜单里先选：
+
+```text
+1) Install / update local Bot API server
+```
+
+按提示输入 `api_id` 和 `api_hash`。脚本会把它们保存到：
+
+```text
+/etc/telegram-bot-api.env
+```
+
+不会写进 GitHub 项目目录。
+
+安装完成后再执行：
+
+```bash
+x local-api-switch
+```
+
+它会：
+
+- 停止当前转发机器人
+- 对公网 Bot API 执行一次 `logOut`
+- 测试本地 `http://127.0.0.1:8081`
+- 自动修改 `.env`
+- 重启转发机器人
+
+查看状态：
+
+```bash
+x local-api-status
+x quality
+```
+
+如果要切回公网 Bot API：
+
+```bash
+x local-api-public
+```
+
+## 手动配置
 
 等本地 `telegram-bot-api` 服务跑起来以后，执行：
 

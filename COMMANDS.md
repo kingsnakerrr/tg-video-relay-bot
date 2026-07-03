@@ -19,6 +19,7 @@ x status      # 查看状态
 x doctor      # 诊断服务和 8787 接口
 x test-submit "https://x.com/..." # 从 VPS 本地测试提交
 x logs        # 实时日志
+x local-api   # 安装/配置 Local Bot API Server
 x fix-env     # 补齐缺少的 .env 默认配置
 x cookies     # 立即同步 cookies.txt
 x shortcut    # 查看 iPhone 快捷指令配置
@@ -159,3 +160,19 @@ x restart
 ```
 
 详细说明见 `LOCAL_BOT_API.md`。
+
+新版也可以直接用菜单：
+
+```bash
+x local-api
+```
+
+常用短命令：
+
+```bash
+x local-api-install  # 安装/更新官方 telegram-bot-api
+x local-api-switch   # 切到本地原画质大文件模式
+x local-api-status   # 查看本地 API 状态
+x local-api-logs     # 看本地 API 日志
+x local-api-public   # 切回公网 50MB + 自动压缩模式
+```

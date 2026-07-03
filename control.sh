@@ -30,6 +30,7 @@ Usage:
   x logs               Follow live logs
   x doctor             Diagnose service and submit API
   x quality            Show original-quality upload settings
+  x local-api          Install/configure local Bot API server
   x fix-env            Add missing default .env keys
   x test-submit URL    Submit one URL from the VPS itself
   x cookies            Sync cookies.txt now
@@ -54,15 +55,16 @@ Telegram Video Relay
 5) Doctor
 6) Logs
 7) Original-quality upload settings
-8) Fix missing .env defaults
-9) Test submit URL
-10) Sync cookies
-11) iPhone Shortcut settings
-12) Edit config
-13) Update
-14) Reinstall
-15) Uninstall service, keep files
-16) Purge everything
+8) Local Bot API server
+9) Fix missing .env defaults
+10) Test submit URL
+11) Sync cookies
+12) iPhone Shortcut settings
+13) Edit config
+14) Update
+15) Reinstall
+16) Uninstall service, keep files
+17) Purge everything
 0) Exit
 EOF
   echo
@@ -75,15 +77,16 @@ EOF
     5) run doctor ;;
     6) run logs ;;
     7) run quality ;;
-    8) run fix-env ;;
-    9) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
-    10) run cookies ;;
-    11) run shortcut ;;
-    12) run env ;;
-    13) run update ;;
-    14) run reinstall ;;
-    15) run uninstall ;;
-    16) run purge ;;
+    8) run local-api ;;
+    9) run fix-env ;;
+    10) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
+    11) run cookies ;;
+    12) run shortcut ;;
+    13) run env ;;
+    14) run update ;;
+    15) run reinstall ;;
+    16) run uninstall ;;
+    17) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice."; exit 1 ;;
   esac
@@ -247,6 +250,30 @@ run() {
       echo "Missing default .env keys have been added."
       echo "Check with: x quality"
       echo "Restart with: x restart"
+      ;;
+    local-api)
+      need_root
+      bash "${APP_DIR}/install_local_bot_api.sh"
+      ;;
+    local-api-install)
+      need_root
+      bash "${APP_DIR}/install_local_bot_api.sh" install
+      ;;
+    local-api-switch|local-api-enable)
+      need_root
+      bash "${APP_DIR}/install_local_bot_api.sh" switch
+      ;;
+    local-api-status)
+      need_root
+      bash "${APP_DIR}/install_local_bot_api.sh" status
+      ;;
+    local-api-logs)
+      need_root
+      bash "${APP_DIR}/install_local_bot_api.sh" logs
+      ;;
+    local-api-public|local-api-disable)
+      need_root
+      bash "${APP_DIR}/install_local_bot_api.sh" public
       ;;
     logs|log)
       journalctl -u "${APP_NAME}" -f
