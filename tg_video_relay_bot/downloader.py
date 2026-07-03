@@ -72,10 +72,10 @@ def _friendly_download_error(url: str, message: str) -> str:
     if "http error 403" in lowered or "forbidden" in lowered:
         if kind == "youtube":
             return (
-                "YouTube returned HTTP 403 Forbidden. This is usually caused by an old yt-dlp, "
-                "VPS IP risk checks, or missing YouTube cookies. Run `x ytdlp-update` first. "
-                "If it still fails, export YouTube cookies in Netscape cookies.txt format, put them "
-                "into COOKIES_FILE, then run `x cookies` and `x restart`."
+                "YouTube 下载地址返回 HTTP 403 Forbidden。通常是 yt-dlp 版本旧、VPS IP 风控、"
+                "没有 YouTube 登录 cookies，或 YouTube 对当前 client 限制。先执行 "
+                "`x ytdlp-update`、`x 1080p`、`x restart`。如果仍失败，把 YouTube 登录 cookies "
+                "导出成 Netscape cookies.txt，放到 COOKIES_FILE，然后执行 `x cookies` 和 `x restart`。"
             )
         if kind == "tiktok":
             return (
@@ -201,6 +201,18 @@ def _probe_score(probe: ResolutionProbe) -> tuple[int, int]:
     return max_height, len(probe.choices)
 
 
+def _should_try_next_client(url: str, error: DownloadError) -> bool:
+    if _url_kind(url) != "youtube":
+        return False
+    lowered = str(error).lower()
+    return (
+        "requested format is not available" in lowered
+        or "http error 403" in lowered
+        or "403 forbidden" in lowered
+        or "forbidden" in lowered
+    )
+
+
 def probe_resolutions(url: str, settings: Settings) -> ResolutionProbe:
     _sync_cookies_or_fail(settings)
     client_sets = _youtube_client_sets(settings) if _url_kind(url) == "youtube" else [settings.youtube_player_clients]
@@ -264,7 +276,7 @@ def download_video(url: str, settings: Settings, download_format: str | None = N
             break
         except DownloadError as exc:
             last_error = exc
-            if "requested format is not available" not in str(exc).lower():
+            if not _should_try_next_client(url, exc):
                 break
 
     if info is None:
