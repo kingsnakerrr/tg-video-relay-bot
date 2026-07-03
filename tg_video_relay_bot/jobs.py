@@ -11,6 +11,7 @@ from .config import Settings
 from .compressor import prepare_upload_file
 from .downloader import cleanup_download, download_video
 from .links import trim_caption
+from .media_info import probe_video_info
 from .telegram_api import TelegramApi
 
 
@@ -70,11 +71,23 @@ class JobQueue:
         try:
             file_path, title = download_video(job.url, self.settings, download_format=job.download_format)
             size_mb = file_path.stat().st_size / 1024 / 1024
-            self._reply(job, f"下载完成：{title}\n大小：{size_mb:.1f} MB\n开始上传到 {len(self.settings.target_chat_ids)} 个目标。")
+            downloaded_info = probe_video_info(file_path)
+            downloaded_label = downloaded_info.label if downloaded_info else "未知"
+            self._reply(
+                job,
+                f"下载完成：{title}\n"
+                f"下载文件：{downloaded_label}，{size_mb:.1f} MB\n"
+                f"开始上传到 {len(self.settings.target_chat_ids)} 个目标。",
+            )
 
             upload_path, note = prepare_upload_file(file_path, self.settings)
+            upload_info = probe_video_info(upload_path)
+            upload_size_mb = upload_path.stat().st_size / 1024 / 1024
             if note:
-                self._reply(job, note)
+                upload_label = upload_info.label if upload_info else "未知"
+                self._reply(job, f"{note}\n上传文件：{upload_label}，{upload_size_mb:.1f} MB")
+            elif upload_path == file_path:
+                self._reply(job, "未压缩，按下载原文件上传。")
 
             failures: list[str] = []
             caption = trim_caption(f"{title}\n{job.url}")

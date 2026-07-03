@@ -1,50 +1,16 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 from typing import Any
 
 import requests
 
+from .media_info import probe_video_info
+
 
 class TelegramApiError(RuntimeError):
     pass
-
-
-def _video_dimensions(file_path: Path) -> tuple[int, int] | None:
-    command = [
-        "ffprobe",
-        "-v",
-        "error",
-        "-select_streams",
-        "v:0",
-        "-show_entries",
-        "stream=width,height:stream_tags=rotate:stream_side_data=rotation",
-        "-of",
-        "json",
-        str(file_path),
-    ]
-    result = subprocess.run(command, capture_output=True, check=False, text=True)
-    if result.returncode != 0:
-        return None
-    try:
-        payload = json.loads(result.stdout)
-        stream = payload["streams"][0]
-        width = int(stream["width"])
-        height = int(stream["height"])
-        rotation = int(stream.get("tags", {}).get("rotate", 0) or 0)
-        for side_data in stream.get("side_data_list", []):
-            if "rotation" in side_data:
-                rotation = int(float(side_data["rotation"]))
-                break
-    except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
-        return None
-    if width <= 0 or height <= 0:
-        return None
-    if abs(rotation) % 180 == 90:
-        width, height = height, width
-    return width, height
 
 
 class TelegramApi:
@@ -169,9 +135,9 @@ class TelegramApi:
             "caption": caption,
             "supports_streaming": True,
         }
-        dimensions = _video_dimensions(file_path)
-        if dimensions:
-            data["width"], data["height"] = dimensions
+        info = probe_video_info(file_path)
+        if info:
+            data["width"], data["height"] = info.width, info.height
         if self.use_local_file_uri:
             data["video"] = file_path.resolve().as_uri()
             self._request("sendVideo", data=data, timeout=self.upload_timeout)

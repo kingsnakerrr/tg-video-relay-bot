@@ -142,7 +142,10 @@ def prepare_upload_file(file_path: Path, settings: Settings) -> tuple[Path, str 
         if output_path.stat().st_size <= settings.max_upload_bytes:
             before_mb = original_size / 1024 / 1024
             after_mb = output_path.stat().st_size / 1024 / 1024
-            return output_path, f"文件超过上传限制，已自动压缩：{before_mb:.1f} MB -> {after_mb:.1f} MB"
+            return (
+                output_path,
+                f"文件超过当前上传限制，已自动压缩，画质会降低：{before_mb:.1f} MB -> {after_mb:.1f} MB",
+            )
 
     if best_output is not None:
         raise CompressionError(

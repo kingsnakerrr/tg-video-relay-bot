@@ -19,6 +19,7 @@ x status      # 查看状态
 x doctor      # 诊断服务和 8787 接口
 x mode        # 查看当前上传模式和两个模式状态
 x 1080p       # 设置 YouTube 最高 1080p + 本地原画质不压缩
+x original    # 切到本地 Bot API 原画质不压缩上传
 x local       # 切到本地 Bot API 原画质模式
 x public      # 切回公网 Bot API 兼容模式
 x ytdlp-update # 更新 yt-dlp，修复 YouTube/TikTok 常见下载失败

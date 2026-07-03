@@ -37,6 +37,7 @@ Usage / 用法:
   x ytdlp-version      Show yt-dlp version / 查看 yt-dlp 版本
   x mode               Show upload mode status / 查看上传模式状态
   x 1080p              Set 1080p no-compress defaults / 设置 1080p 不压缩
+  x original           Switch to original-quality upload / 切到原画质不压缩上传
   x local              Switch to Local Bot API mode / 切换到本地原画质模式
   x public             Switch to public Bot API mode / 切回公网兼容模式
   x quality            Show original-quality upload settings / 查看原画质上传配置
@@ -279,6 +280,21 @@ set_1080p_original_defaults() {
   fi
 }
 
+switch_original_quality() {
+  need_root
+  ensure_env_defaults
+  if ! systemctl is-active --quiet "${LOCAL_API_NAME}" 2>/dev/null; then
+    echo "Local Bot API is not active, so original-quality large uploads are not ready."
+    echo "本地 Bot API 没有运行，所以还不能原画质上传大文件。"
+    echo
+    echo "Run / 请执行："
+    echo "  x local-api-install"
+    echo "  x original"
+    exit 1
+  fi
+  set_1080p_original_defaults
+}
+
 generate_secret() {
   if [ -x "${APP_DIR}/.venv/bin/python" ]; then
     "${APP_DIR}/.venv/bin/python" -c 'import secrets; print(secrets.token_urlsafe(32))'
@@ -357,6 +373,9 @@ run() {
       ;;
     1080p|youtube-1080p|quality-1080p)
       set_1080p_original_defaults
+      ;;
+    original|original-quality|no-compress)
+      switch_original_quality
       ;;
     doctor)
       need_root
