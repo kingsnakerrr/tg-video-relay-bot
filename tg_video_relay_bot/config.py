@@ -72,6 +72,24 @@ def _env_int(name: str, default: int) -> int:
     return int(value)
 
 
+def _env_size_bytes(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    text = value.strip().lower()
+    multiplier = 1
+    if text.endswith("k"):
+        multiplier = 1024
+        text = text[:-1]
+    elif text.endswith("m"):
+        multiplier = 1024 * 1024
+        text = text[:-1]
+    elif text.endswith("g"):
+        multiplier = 1024 * 1024 * 1024
+        text = text[:-1]
+    return int(float(text) * multiplier)
+
+
 @dataclass(frozen=True)
 class Settings:
     bot_token: str
@@ -87,6 +105,9 @@ class Settings:
     auto_compress: bool
     compress_audio_kbps: int
     compress_min_video_kbps: int
+    ytdlp_force_ipv4: bool
+    ytdlp_http_chunk_size: int
+    youtube_player_clients: list[str]
     cookies_file: Path | None
     cookie_sync_url: str
     cookie_sync_interval_minutes: int
@@ -148,6 +169,9 @@ def load_settings() -> Settings:
         auto_compress=_env_bool("AUTO_COMPRESS", True),
         compress_audio_kbps=_env_int("COMPRESS_AUDIO_KBPS", 96),
         compress_min_video_kbps=_env_int("COMPRESS_MIN_VIDEO_KBPS", 60),
+        ytdlp_force_ipv4=_env_bool("YTDLP_FORCE_IPV4", True),
+        ytdlp_http_chunk_size=_env_size_bytes("YTDLP_HTTP_CHUNK_SIZE", 10 * 1024 * 1024),
+        youtube_player_clients=_split_csv(os.getenv("YOUTUBE_PLAYER_CLIENTS", "android,web")),
         cookies_file=cookies_file,
         cookie_sync_url=os.getenv("COOKIE_SYNC_URL", "").strip(),
         cookie_sync_interval_minutes=max(1, _env_int("COOKIE_SYNC_INTERVAL_MINUTES", 360)),

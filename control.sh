@@ -32,6 +32,8 @@ Usage / 用法:
   x status             Show service status / 查看服务状态
   x logs               Follow live logs / 查看实时日志
   x doctor             Diagnose service and submit API / 诊断服务和提交接口
+  x ytdlp-update       Update yt-dlp downloader / 更新 yt-dlp 下载器
+  x ytdlp-version      Show yt-dlp version / 查看 yt-dlp 版本
   x mode               Show upload mode status / 查看上传模式状态
   x local              Switch to Local Bot API mode / 切换到本地原画质模式
   x public             Switch to public Bot API mode / 切回公网兼容模式
@@ -88,16 +90,17 @@ Actions / 操作菜单
 6) Logs / 日志
 7) Upload mode status / 上传模式状态
 8) Original-quality upload settings / 原画质上传配置
-9) Local Bot API server / 本地 Bot API 服务
-10) Fix missing .env defaults / 补齐缺少的 .env 默认配置
-11) Test submit URL / 测试提交链接
-12) Sync cookies / 同步 cookies
-13) iPhone Shortcut settings / iPhone 快捷指令配置
-14) Edit config / 编辑配置
-15) Update / 更新
-16) Reinstall / 重装
-17) Uninstall service, keep files / 卸载服务但保留文件
-18) Purge everything / 彻底删除
+9) Update yt-dlp downloader / 更新 yt-dlp 下载器
+10) Local Bot API server / 本地 Bot API 服务
+11) Fix missing .env defaults / 补齐缺少的 .env 默认配置
+12) Test submit URL / 测试提交链接
+13) Sync cookies / 同步 cookies
+14) iPhone Shortcut settings / iPhone 快捷指令配置
+15) Edit config / 编辑配置
+16) Update / 更新
+17) Reinstall / 重装
+18) Uninstall service, keep files / 卸载服务但保留文件
+19) Purge everything / 彻底删除
 0) Exit / 退出
 EOF
   echo
@@ -111,16 +114,17 @@ EOF
     6) run logs ;;
     7) run mode ;;
     8) run quality ;;
-    9) run local-api ;;
-    10) run fix-env ;;
-    11) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
-    12) run cookies ;;
-    13) run shortcut ;;
-    14) run env ;;
-    15) run update ;;
-    16) run reinstall ;;
-    17) run uninstall ;;
-    18) run purge ;;
+    9) run ytdlp-update ;;
+    10) run local-api ;;
+    11) run fix-env ;;
+    12) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
+    13) run cookies ;;
+    14) run shortcut ;;
+    15) run env ;;
+    16) run update ;;
+    17) run reinstall ;;
+    18) run uninstall ;;
+    19) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice. / 选择无效。"; exit 1 ;;
   esac
@@ -261,6 +265,9 @@ ensure_upload_env() {
   grep -q '^AUTO_COMPRESS=' "${env_file}" || printf 'AUTO_COMPRESS=true\n' >> "${env_file}"
   grep -q '^COMPRESS_AUDIO_KBPS=' "${env_file}" || printf 'COMPRESS_AUDIO_KBPS=96\n' >> "${env_file}"
   grep -q '^COMPRESS_MIN_VIDEO_KBPS=' "${env_file}" || printf 'COMPRESS_MIN_VIDEO_KBPS=60\n' >> "${env_file}"
+  grep -q '^YTDLP_FORCE_IPV4=' "${env_file}" || printf 'YTDLP_FORCE_IPV4=true\n' >> "${env_file}"
+  grep -q '^YTDLP_HTTP_CHUNK_SIZE=' "${env_file}" || printf 'YTDLP_HTTP_CHUNK_SIZE=10M\n' >> "${env_file}"
+  grep -q '^YOUTUBE_PLAYER_CLIENTS=' "${env_file}" || printf 'YOUTUBE_PLAYER_CLIENTS=android,web\n' >> "${env_file}"
 }
 
 ensure_env_defaults() {
@@ -322,6 +329,9 @@ run() {
       printf 'BOT_API_USE_LOCAL_FILE_URI=%s\n' "$(env_value BOT_API_USE_LOCAL_FILE_URI)"
       printf 'MAX_UPLOAD_MB=%s\n' "$(env_value MAX_UPLOAD_MB)"
       printf 'AUTO_COMPRESS=%s\n' "$(env_value AUTO_COMPRESS)"
+      printf 'YTDLP_FORCE_IPV4=%s\n' "$(env_value YTDLP_FORCE_IPV4)"
+      printf 'YTDLP_HTTP_CHUNK_SIZE=%s\n' "$(env_value YTDLP_HTTP_CHUNK_SIZE)"
+      printf 'YOUTUBE_PLAYER_CLIENTS=%s\n' "$(env_value YOUTUBE_PLAYER_CLIENTS)"
       echo
       echo "== Service / 服务 =="
       systemctl is-active "${APP_NAME}" || true
@@ -338,6 +348,16 @@ run() {
       echo "  x update"
       echo "  x restart"
       echo "  x logs"
+      ;;
+    ytdlp-update|yt-dlp-update|update-ytdlp)
+      need_root
+      "${APP_DIR}/.venv/bin/python" -m pip install --upgrade yt-dlp
+      "${APP_DIR}/.venv/bin/python" -m yt_dlp --version
+      systemctl restart "${APP_NAME}"
+      echo "yt-dlp updated and bot restarted. / yt-dlp 已更新并已重启机器人。"
+      ;;
+    ytdlp-version|yt-dlp-version)
+      "${APP_DIR}/.venv/bin/python" -m yt_dlp --version
       ;;
     quality)
       env_file="${APP_DIR}/.env"
@@ -469,7 +489,8 @@ run() {
       git -C "${APP_DIR}" fetch origin "${BRANCH}"
       git -C "${APP_DIR}" checkout "${BRANCH}"
       git -C "${APP_DIR}" pull --ff-only origin "${BRANCH}"
-      "${APP_DIR}/.venv/bin/python" -m pip install -r "${APP_DIR}/requirements.txt"
+      "${APP_DIR}/.venv/bin/python" -m pip install --upgrade -r "${APP_DIR}/requirements.txt"
+      "${APP_DIR}/.venv/bin/python" -m pip install --upgrade yt-dlp
       ensure_env_defaults
       if [ -f "${APP_DIR}/control.sh" ]; then
         install -m 755 "${APP_DIR}/control.sh" "${CONTROL_BIN}"

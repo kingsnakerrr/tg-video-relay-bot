@@ -9,7 +9,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-03.7"
+INSTALLER_VERSION="2026-07-03.8"
 
 die() {
   echo "ERROR: $*" >&2
@@ -140,7 +140,8 @@ step "Creating Python virtual environment / 创建 Python 虚拟环境"
 "${PYTHON_BIN}" -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install --upgrade -r requirements.txt
+python -m pip install --upgrade yt-dlp
 
 if [ ! -f .env ]; then
   step "Creating .env / 创建配置文件 .env"
@@ -187,6 +188,9 @@ MAX_UPLOAD_MB=49
 AUTO_COMPRESS=true
 COMPRESS_AUDIO_KBPS=96
 COMPRESS_MIN_VIDEO_KBPS=60
+YTDLP_FORCE_IPV4=true
+YTDLP_HTTP_CHUNK_SIZE=10M
+YOUTUBE_PLAYER_CLIENTS=android,web
 COOKIES_FILE=${APP_DIR}/cookies.txt
 COOKIE_SYNC_URL=
 COOKIE_SYNC_INTERVAL_MINUTES=360
@@ -212,6 +216,9 @@ grep -q '^BOT_API_USE_LOCAL_FILE_URI=' .env || printf 'BOT_API_USE_LOCAL_FILE_UR
 grep -q '^AUTO_COMPRESS=' .env || printf 'AUTO_COMPRESS=true\n' >> .env
 grep -q '^COMPRESS_AUDIO_KBPS=' .env || printf 'COMPRESS_AUDIO_KBPS=96\n' >> .env
 grep -q '^COMPRESS_MIN_VIDEO_KBPS=' .env || printf 'COMPRESS_MIN_VIDEO_KBPS=60\n' >> .env
+grep -q '^YTDLP_FORCE_IPV4=' .env || printf 'YTDLP_FORCE_IPV4=true\n' >> .env
+grep -q '^YTDLP_HTTP_CHUNK_SIZE=' .env || printf 'YTDLP_HTTP_CHUNK_SIZE=10M\n' >> .env
+grep -q '^YOUTUBE_PLAYER_CLIENTS=' .env || printf 'YOUTUBE_PLAYER_CLIENTS=android,web\n' >> .env
 if grep -q '^COOKIES_FILE=$' .env; then
   sed -i "s|^COOKIES_FILE=$|COOKIES_FILE=${APP_DIR}/cookies.txt|" .env
 fi
