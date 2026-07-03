@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
+APP_VERSION="v30"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -22,7 +23,7 @@ need_root() {
 
 usage() {
   cat <<EOF
-Telegram Video Relay control / Telegram 视频转发控制命令
+Telegram Video Relay control ${APP_VERSION} / Telegram 视频转发控制命令 ${APP_VERSION}
 
 Usage / 用法:
   x                    Open menu / 打开菜单
@@ -66,7 +67,7 @@ menu() {
   fi
   local_status="$(local_api_short_status)"
   cat <<EOF
-Telegram Video Relay / Telegram 视频转发
+Telegram Video Relay ${APP_VERSION} / Telegram 视频转发 ${APP_VERSION}
 
 Upload mode overview / 上传模式概览
 
@@ -333,6 +334,11 @@ ensure_upload_env() {
   grep -q '^YTDLP_FORCE_IPV4=' "${env_file}" || printf 'YTDLP_FORCE_IPV4=true\n' >> "${env_file}"
   grep -q '^YTDLP_HTTP_CHUNK_SIZE=' "${env_file}" || printf 'YTDLP_HTTP_CHUNK_SIZE=10M\n' >> "${env_file}"
   grep -q '^YOUTUBE_PLAYER_CLIENTS=' "${env_file}" || printf 'YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android\n' >> "${env_file}"
+  grep -q '^COOKIES_FILE_X=' "${env_file}" || printf 'COOKIES_FILE_X=%s/cookies_x.txt\n' "${APP_DIR}" >> "${env_file}"
+  grep -q '^COOKIES_FILE_YOUTUBE=' "${env_file}" || printf 'COOKIES_FILE_YOUTUBE=%s/cookies_youtube.txt\n' "${APP_DIR}" >> "${env_file}"
+  if [ "$(env_value COOKIES_FILE)" = "${APP_DIR}/cookies.txt" ]; then
+    set_env_value "${env_file}" COOKIES_FILE ""
+  fi
   grep -q '^TELEGRAM_RESOLUTION_MENU=' "${env_file}" || printf 'TELEGRAM_RESOLUTION_MENU=true\n' >> "${env_file}"
 }
 
@@ -385,6 +391,7 @@ run() {
       secret="$(env_value SUBMIT_API_SECRET)"
       [ -n "${port}" ] || port="8787"
       echo "== Version / 版本 =="
+      echo "APP_VERSION=${APP_VERSION}"
       grep 'INSTALLER_VERSION=' "${APP_DIR}/install.sh" 2>/dev/null || echo "install.sh not found"
       echo
       echo "== Submit API .env / 提交接口配置 =="
@@ -405,6 +412,9 @@ run() {
       printf 'YTDLP_FORCE_IPV4=%s\n' "$(env_value YTDLP_FORCE_IPV4)"
       printf 'YTDLP_HTTP_CHUNK_SIZE=%s\n' "$(env_value YTDLP_HTTP_CHUNK_SIZE)"
       printf 'YOUTUBE_PLAYER_CLIENTS=%s\n' "$(env_value YOUTUBE_PLAYER_CLIENTS)"
+      printf 'COOKIES_FILE_X=%s\n' "$(env_value COOKIES_FILE_X)"
+      printf 'COOKIES_FILE_YOUTUBE=%s\n' "$(env_value COOKIES_FILE_YOUTUBE)"
+      printf 'COOKIES_FILE=%s\n' "$(env_value COOKIES_FILE)"
       printf 'TELEGRAM_RESOLUTION_MENU=%s\n' "$(env_value TELEGRAM_RESOLUTION_MENU)"
       echo
       echo "== Service / 服务 =="

@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
+APP_VERSION="v30"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -9,7 +10,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-03.13"
+INSTALLER_VERSION="2026-07-03.15"
 
 die() {
   echo "ERROR: $*" >&2
@@ -51,7 +52,7 @@ if [ "$(id -u)" -ne 0 ]; then
   die "Please run as root / 请用 root 运行，例如: sudo bash install.sh"
 fi
 
-echo "Telegram Video Relay installer ${INSTALLER_VERSION} / Telegram 视频转发机器人安装器 ${INSTALLER_VERSION}"
+echo "Telegram Video Relay ${APP_VERSION} installer ${INSTALLER_VERSION} / Telegram 视频转发机器人安装器 ${APP_VERSION} ${INSTALLER_VERSION}"
 
 case "${1:-}" in
   uninstall)
@@ -191,7 +192,9 @@ COMPRESS_MIN_VIDEO_KBPS=60
 YTDLP_FORCE_IPV4=true
 YTDLP_HTTP_CHUNK_SIZE=10M
 YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android
-COOKIES_FILE=${APP_DIR}/cookies.txt
+COOKIES_FILE=
+COOKIES_FILE_X=${APP_DIR}/cookies_x.txt
+COOKIES_FILE_YOUTUBE=${APP_DIR}/cookies_youtube.txt
 COOKIE_SYNC_URL=
 COOKIE_SYNC_INTERVAL_MINUTES=360
 UPLOAD_MODE=video
@@ -223,9 +226,14 @@ grep -q '^YTDLP_HTTP_CHUNK_SIZE=' .env || printf 'YTDLP_HTTP_CHUNK_SIZE=10M\n' >
 grep -q '^YOUTUBE_PLAYER_CLIENTS=' .env || printf 'YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android\n' >> .env
 grep -q '^TELEGRAM_RESOLUTION_MENU=' .env || printf 'TELEGRAM_RESOLUTION_MENU=true\n' >> .env
 if grep -q '^COOKIES_FILE=$' .env; then
-  sed -i "s|^COOKIES_FILE=$|COOKIES_FILE=${APP_DIR}/cookies.txt|" .env
+  sed -i "s|^COOKIES_FILE=$|COOKIES_FILE=|" .env
 fi
-grep -q '^COOKIES_FILE=' .env || printf 'COOKIES_FILE=%s/cookies.txt\n' "${APP_DIR}" >> .env
+if grep -q "^COOKIES_FILE=${APP_DIR}/cookies.txt$" .env; then
+  sed -i "s|^COOKIES_FILE=${APP_DIR}/cookies.txt$|COOKIES_FILE=|" .env
+fi
+grep -q '^COOKIES_FILE=' .env || printf 'COOKIES_FILE=\n' >> .env
+grep -q '^COOKIES_FILE_X=' .env || printf 'COOKIES_FILE_X=%s/cookies_x.txt\n' "${APP_DIR}" >> .env
+grep -q '^COOKIES_FILE_YOUTUBE=' .env || printf 'COOKIES_FILE_YOUTUBE=%s/cookies_youtube.txt\n' "${APP_DIR}" >> .env
 grep -q '^COOKIE_SYNC_URL=' .env || printf 'COOKIE_SYNC_URL=\n' >> .env
 grep -q '^COOKIE_SYNC_INTERVAL_MINUTES=' .env || printf 'COOKIE_SYNC_INTERVAL_MINUTES=360\n' >> .env
 grep -q '^SUBMIT_API_ENABLED=' .env || printf 'SUBMIT_API_ENABLED=true\n' >> .env
@@ -240,9 +248,9 @@ if ! grep -q '^SUBMIT_API_SECRET=' .env || grep -q '^SUBMIT_API_SECRET=$' .env; 
   fi
 fi
 grep -q '^SUBMIT_NOTIFY_CHAT_ID=' .env || printf 'SUBMIT_NOTIFY_CHAT_ID=\n' >> .env
-if [ -f "${APP_DIR}/cookies.txt" ]; then
-  chmod 600 "${APP_DIR}/cookies.txt"
-fi
+for cookie_file in "${APP_DIR}/cookies.txt" "${APP_DIR}/cookies_x.txt" "${APP_DIR}/cookies_youtube.txt"; do
+  [ -f "${cookie_file}" ] && chmod 600 "${cookie_file}"
+done
 
 step "Writing systemd service / 写入 systemd 服务"
 cat > "${SERVICE_FILE}" <<EOF_SERVICE

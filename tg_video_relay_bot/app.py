@@ -136,10 +136,14 @@ def _send_resolution_menu(
 
     token = secrets.token_urlsafe(8)
     default_label = "默认 1080p"
+    default_choice = next(
+        (choice for choice in probe.choices if probe.default_height and choice.height == probe.default_height),
+        None,
+    )
     if probe.default_height and probe.default_height < DEFAULT_MAX_HEIGHT:
-        default_label = f"默认 1080p（最高 {probe.default_height}p）"
-    elif probe.default_height:
-        default_label = f"默认 1080p（{probe.default_height}p）"
+        default_label = f"默认 1080p（最高 {default_choice.label if default_choice else f'{probe.default_height}p'}）"
+    elif default_choice:
+        default_label = f"默认 1080p（{default_choice.label}）"
 
     choices: dict[str, tuple[str, str]] = {
         "auto": (settings.download_format or DEFAULT_DOWNLOAD_FORMAT, default_label),
@@ -174,7 +178,7 @@ def _send_resolution_menu(
         chat_id,
         "请选择下载清晰度：\n"
         f"{title}\n\n"
-        "默认会选最高 1080p；如果源视频低于 1080p，就自动选最高可用。",
+        "默认会选最高 1080p；如果源视频低于 1080p，就自动选最高可用。大小是 yt-dlp 估算值。",
         reply_to_message_id=message_id,
         reply_markup={"inline_keyboard": keyboard},
     )

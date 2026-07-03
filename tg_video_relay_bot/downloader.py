@@ -25,6 +25,7 @@ class ResolutionChoice:
     height: int
     label: str
     format_selector: str
+    size_label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -100,10 +101,30 @@ def _sync_cookies_or_fail(settings: Settings, cleanup_dir: Path | None = None) -
     try:
         sync_cookies_if_needed(settings)
     except CookieSyncError as exc:
-        if not (settings.cookies_file and settings.cookies_file.exists()):
+        has_any_cookie_file = any(
+            path and path.exists()
+            for path in (settings.cookies_file_x, settings.cookies_file_youtube, settings.cookies_file)
+        )
+        if not has_any_cookie_file:
             if cleanup_dir is not None:
                 shutil.rmtree(cleanup_dir, ignore_errors=True)
             raise DownloadError(str(exc)) from exc
+
+
+def _cookie_file_for_url(url: str, settings: Settings) -> Path | None:
+    kind = _url_kind(url)
+    candidates: list[Path | None]
+    if kind == "youtube":
+        candidates = [settings.cookies_file_youtube, settings.cookies_file]
+    elif kind == "twitter":
+        candidates = [settings.cookies_file_x, settings.cookies_file]
+    else:
+        candidates = [settings.cookies_file]
+
+    for path in candidates:
+        if path and path.exists():
+            return path
+    return None
 
 
 def _youtube_client_sets(settings: Settings) -> list[list[str]]:
@@ -155,38 +176,49 @@ def _base_ytdlp_options(
         options["extractor_args"] = {
             "youtube": {"player_client": youtube_clients},
         }
-    if settings.cookies_file and settings.cookies_file.exists():
-        options["cookiefile"] = str(settings.cookies_file)
+    cookie_file = _cookie_file_for_url(url, settings)
+    if cookie_file:
+        options["cookiefile"] = str(cookie_file)
     return options
 
 
 def _probe_from_info(info: dict[str, object]) -> ResolutionProbe:
     formats = info.get("formats") or []
-    heights: set[int] = set()
+    sizes_by_height: dict[int, int] = {}
+    audio_size = 0
+    try:
+        duration = float(info.get("duration") or 0)
+    except (TypeError, ValueError):
+        duration = 0
     for item in formats:
         if not isinstance(item, dict):
             continue
         vcodec = str(item.get("vcodec") or "")
+        acodec = str(item.get("acodec") or "")
+        size = _format_size_bytes(item, duration)
         if vcodec == "none":
+            if acodec != "none" and size > audio_size:
+                audio_size = size
             continue
         try:
             height = int(item.get("height") or 0)
         except (TypeError, ValueError):
             continue
         if height > 0:
-            heights.add(height)
+            sizes_by_height[height] = max(sizes_by_height.get(height, 0), size)
 
-    if not heights:
+    if not sizes_by_height:
         height = int(info.get("height") or 0)
         if height > 0:
-            heights.add(height)
+            sizes_by_height[height] = _format_size_bytes(info, duration)
 
-    sorted_heights = sorted(heights, reverse=True)
+    sorted_heights = sorted(sizes_by_height, reverse=True)
     choices = [
         ResolutionChoice(
             height=height,
-            label=f"{height}p",
+            label=_resolution_label(height, sizes_by_height.get(height, 0), audio_size),
             format_selector=format_for_exact_height(height),
+            size_label=_size_label(_combined_size(sizes_by_height.get(height, 0), audio_size)),
         )
         for height in sorted_heights[:12]
     ]
@@ -194,6 +226,46 @@ def _probe_from_info(info: dict[str, object]) -> ResolutionProbe:
     default_height = default_candidates[0] if default_candidates else (sorted_heights[-1] if sorted_heights else None)
     title = str(info.get("title") or "video")
     return ResolutionProbe(title=title, choices=choices, default_height=default_height)
+
+
+def _format_size_bytes(item: dict[str, object], duration: float = 0) -> int:
+    for key in ("filesize", "filesize_approx"):
+        value = item.get(key)
+        try:
+            size = int(float(value or 0))
+        except (TypeError, ValueError):
+            size = 0
+        if size > 0:
+            return size
+    try:
+        tbr = float(item.get("tbr") or 0)
+    except (TypeError, ValueError):
+        tbr = 0
+    if duration > 0 and tbr > 0:
+        return int((tbr * 1000 / 8) * duration)
+    return 0
+
+
+def _combined_size(video_size: int, audio_size: int) -> int:
+    if video_size <= 0:
+        return 0
+    return video_size + max(audio_size, 0)
+
+
+def _size_label(size_bytes: int) -> str | None:
+    if size_bytes <= 0:
+        return None
+    size_mb = size_bytes / 1024 / 1024
+    if size_mb >= 1024:
+        return f"{size_mb / 1024:.1f} GB"
+    return f"{size_mb:.0f} MB"
+
+
+def _resolution_label(height: int, video_size: int, audio_size: int) -> str:
+    size_label = _size_label(_combined_size(video_size, audio_size))
+    if size_label:
+        return f"{height}p · {size_label}"
+    return f"{height}p · 大小未知"
 
 
 def _probe_score(probe: ResolutionProbe) -> tuple[int, int]:

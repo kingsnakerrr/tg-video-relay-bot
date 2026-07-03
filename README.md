@@ -133,26 +133,53 @@ journalctl -u telegram-video-relay -f
 
 ## Cookie 登录
 
-部分平台或年龄限制视频可能需要 cookie。请使用 Netscape 格式的 `cookies.txt`。
+部分平台或年龄限制视频可能需要 cookie。请使用 Netscape 格式 cookie 文件。
 
-手动上传到 VPS：
+默认分开保存：
+
+```text
+/opt/tg-video-relay-bot/cookies_x.txt
+/opt/tg-video-relay-bot/cookies_youtube.txt
+```
+
+X/Twitter 链接自动读取 `cookies_x.txt`，YouTube 链接自动读取 `cookies_youtube.txt`。
+
+把旧 X cookies 迁移到新路径：
 
 ```bash
 cd /opt/tg-video-relay-bot
-chmod 600 cookies.txt
+cp cookies.txt cookies_x.txt
+chmod 600 cookies_x.txt
+x cookies
+x restart
+```
+
+YouTube cookies 上传到 VPS：
+
+```text
+/opt/tg-video-relay-bot/cookies_youtube.txt
+```
+
+然后执行：
+
+```bash
+cd /opt/tg-video-relay-bot
+chmod 600 cookies_youtube.txt
 x restart
 ```
 
 `.env` 里保持：
 
 ```env
-COOKIES_FILE=/opt/tg-video-relay-bot/cookies.txt
+COOKIES_FILE=
+COOKIES_FILE_X=/opt/tg-video-relay-bot/cookies_x.txt
+COOKIES_FILE_YOUTUBE=/opt/tg-video-relay-bot/cookies_youtube.txt
 ```
 
-也可以让 VPS 从你的 OneDrive/OpenList 私密直链自动同步：
+也可以让 VPS 从你的 OneDrive/OpenList 私密直链自动同步 X cookies：
 
 ```env
-COOKIES_FILE=/opt/tg-video-relay-bot/cookies.txt
+COOKIES_FILE_X=/opt/tg-video-relay-bot/cookies_x.txt
 COOKIE_SYNC_URL=https://你的私密直链/cookies.txt
 COOKIE_SYNC_INTERVAL_MINUTES=360
 ```

@@ -53,10 +53,13 @@ def _looks_like_netscape_cookies(content: bytes) -> bool:
 def sync_cookies_if_needed(settings: Settings, *, force: bool = False) -> str | None:
     if not settings.cookie_sync_url:
         return None
-    if settings.cookies_file is None:
-        raise CookieSyncError("COOKIE_SYNC_URL is set, but COOKIES_FILE is empty.")
+    if settings.cookies_file_x is not None:
+        cookies_file = settings.cookies_file_x
+    elif settings.cookies_file is not None:
+        cookies_file = settings.cookies_file
+    else:
+        raise CookieSyncError("COOKIE_SYNC_URL is set, but COOKIES_FILE_X and COOKIES_FILE are empty.")
 
-    cookies_file = settings.cookies_file
     state_file = _state_path(cookies_file)
     state = _read_state(state_file)
     now = int(time.time())

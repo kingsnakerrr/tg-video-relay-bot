@@ -107,6 +107,13 @@ def prepare_upload_file(file_path: Path, settings: Settings) -> tuple[Path, str 
     if original_size <= settings.max_upload_bytes:
         return file_path, None
 
+    if settings.bot_api_use_local_file_uri:
+        raise CompressionError(
+            f"File is {original_size / 1024 / 1024:.1f} MB, above MAX_UPLOAD_MB={settings.max_upload_mb}. "
+            "Local Bot API original-quality mode will not compress it. Increase MAX_UPLOAD_MB if your "
+            "Telegram Bot API server supports this size."
+        )
+
     if not settings.auto_compress:
         raise CompressionError(
             f"File is {original_size / 1024 / 1024:.1f} MB, above MAX_UPLOAD_MB={settings.max_upload_mb}. "
