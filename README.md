@@ -185,6 +185,7 @@ curl -L "你的COOKIE_SYNC_URL" | head
 - 上传失败：确认机器人在目标频道/群组里有发消息权限。
 - YouTube 默认最高 1080p：`DOWNLOAD_FORMAT=bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best`。想 1080p 且不压缩，先装好 Local Bot API，然后执行 `x 1080p`。
 - Telegram 里直接发链接会返回可下载清晰度按钮，点选后才开始下载。iPhone 快捷指令不会弹按钮，会直接按默认最高 1080p 下载；源视频不到 1080p 时自动拿最高可用。
+- 如果 YouTube 明明有 1080p/4K，但按钮只显示 360p，通常是 YouTube 给 VPS/当前 yt-dlp client 只返回低清晰度。先执行 `x ytdlp-update`、`x 1080p`、`x restart`；仍不行就给 `COOKIES_FILE` 配置 YouTube 登录 cookies。
 - 不想在 Telegram 里选清晰度：把 `.env` 里的 `TELEGRAM_RESOLUTION_MENU=false`，然后执行 `x restart`。
 - 视频太大：公网 Bot API 只能约 50MB；不想压缩请用 `x local-api` 安装本地 Bot API，再用 `x 1080p`。
 - Telegram 不识别视频：把 `UPLOAD_MODE=document`，会作为文件发送。

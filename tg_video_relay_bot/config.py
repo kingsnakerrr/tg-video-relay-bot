@@ -174,7 +174,7 @@ def load_settings() -> Settings:
         compress_min_video_kbps=_env_int("COMPRESS_MIN_VIDEO_KBPS", 60),
         ytdlp_force_ipv4=_env_bool("YTDLP_FORCE_IPV4", True),
         ytdlp_http_chunk_size=_env_size_bytes("YTDLP_HTTP_CHUNK_SIZE", 10 * 1024 * 1024),
-        youtube_player_clients=_split_csv(os.getenv("YOUTUBE_PLAYER_CLIENTS", "android,web")),
+        youtube_player_clients=_split_csv(os.getenv("YOUTUBE_PLAYER_CLIENTS", "web,web_safari,ios,android")),
         cookies_file=cookies_file,
         cookie_sync_url=os.getenv("COOKIE_SYNC_URL", "").strip(),
         cookie_sync_interval_minutes=max(1, _env_int("COOKIE_SYNC_INTERVAL_MINUTES", 360)),

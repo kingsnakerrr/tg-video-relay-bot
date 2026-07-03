@@ -9,7 +9,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-03.10"
+INSTALLER_VERSION="2026-07-03.11"
 
 die() {
   echo "ERROR: $*" >&2
@@ -190,7 +190,7 @@ COMPRESS_AUDIO_KBPS=96
 COMPRESS_MIN_VIDEO_KBPS=60
 YTDLP_FORCE_IPV4=true
 YTDLP_HTTP_CHUNK_SIZE=10M
-YOUTUBE_PLAYER_CLIENTS=android,web
+YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android
 COOKIES_FILE=${APP_DIR}/cookies.txt
 COOKIE_SYNC_URL=
 COOKIE_SYNC_INTERVAL_MINUTES=360
@@ -220,7 +220,7 @@ grep -q '^COMPRESS_AUDIO_KBPS=' .env || printf 'COMPRESS_AUDIO_KBPS=96\n' >> .en
 grep -q '^COMPRESS_MIN_VIDEO_KBPS=' .env || printf 'COMPRESS_MIN_VIDEO_KBPS=60\n' >> .env
 grep -q '^YTDLP_FORCE_IPV4=' .env || printf 'YTDLP_FORCE_IPV4=true\n' >> .env
 grep -q '^YTDLP_HTTP_CHUNK_SIZE=' .env || printf 'YTDLP_HTTP_CHUNK_SIZE=10M\n' >> .env
-grep -q '^YOUTUBE_PLAYER_CLIENTS=' .env || printf 'YOUTUBE_PLAYER_CLIENTS=android,web\n' >> .env
+grep -q '^YOUTUBE_PLAYER_CLIENTS=' .env || printf 'YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android\n' >> .env
 grep -q '^TELEGRAM_RESOLUTION_MENU=' .env || printf 'TELEGRAM_RESOLUTION_MENU=true\n' >> .env
 if grep -q '^COOKIES_FILE=$' .env; then
   sed -i "s|^COOKIES_FILE=$|COOKIES_FILE=${APP_DIR}/cookies.txt|" .env

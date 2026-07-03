@@ -13,6 +13,7 @@ from .formats import DEFAULT_DOWNLOAD_FORMAT, DEFAULT_MAX_HEIGHT, format_for_exa
 
 
 TEMP_SUFFIXES = (".part", ".ytdl", ".temp", ".tmp")
+YOUTUBE_FALLBACK_PLAYER_CLIENTS = ("web", "web_safari", "ios", "android", "tv")
 
 
 class DownloadError(RuntimeError):
@@ -105,7 +106,30 @@ def _sync_cookies_or_fail(settings: Settings, cleanup_dir: Path | None = None) -
             raise DownloadError(str(exc)) from exc
 
 
-def _base_ytdlp_options(url: str, settings: Settings) -> dict[str, object]:
+def _youtube_client_sets(settings: Settings) -> list[list[str]]:
+    sets: list[list[str]] = []
+    if settings.youtube_player_clients:
+        sets.append(settings.youtube_player_clients)
+    sets.extend([[client] for client in YOUTUBE_FALLBACK_PLAYER_CLIENTS])
+    sets.append([])
+
+    seen: set[tuple[str, ...]] = set()
+    unique: list[list[str]] = []
+    for clients in sets:
+        key = tuple(clients)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(clients)
+    return unique
+
+
+def _base_ytdlp_options(
+    url: str,
+    settings: Settings,
+    *,
+    youtube_clients: list[str] | None = None,
+) -> dict[str, object]:
     options: dict[str, object] = {
         "noplaylist": True,
         "restrictfilenames": True,
@@ -125,26 +149,18 @@ def _base_ytdlp_options(url: str, settings: Settings) -> dict[str, object]:
         options["source_address"] = "0.0.0.0"
     if settings.ytdlp_http_chunk_size > 0:
         options["http_chunk_size"] = settings.ytdlp_http_chunk_size
-    if settings.youtube_player_clients:
+    if youtube_clients is None:
+        youtube_clients = settings.youtube_player_clients
+    if youtube_clients:
         options["extractor_args"] = {
-            "youtube": {"player_client": settings.youtube_player_clients},
+            "youtube": {"player_client": youtube_clients},
         }
     if settings.cookies_file and settings.cookies_file.exists():
         options["cookiefile"] = str(settings.cookies_file)
     return options
 
 
-def probe_resolutions(url: str, settings: Settings) -> ResolutionProbe:
-    _sync_cookies_or_fail(settings)
-    options = _base_ytdlp_options(url, settings)
-
-    try:
-        with yt_dlp.YoutubeDL(options) as ydl:
-            info = ydl.extract_info(url, download=False)
-    except Exception as exc:
-        raise DownloadError(_friendly_download_error(url, str(exc))) from exc
-
-    info = info or {}
+def _probe_from_info(info: dict[str, object]) -> ResolutionProbe:
     formats = info.get("formats") or []
     heights: set[int] = set()
     for item in formats:
@@ -172,12 +188,54 @@ def probe_resolutions(url: str, settings: Settings) -> ResolutionProbe:
             label=f"{height}p",
             format_selector=format_for_exact_height(height),
         )
-        for height in sorted_heights[:10]
+        for height in sorted_heights[:12]
     ]
     default_candidates = [height for height in sorted_heights if height <= DEFAULT_MAX_HEIGHT]
     default_height = default_candidates[0] if default_candidates else (sorted_heights[-1] if sorted_heights else None)
     title = str(info.get("title") or "video")
     return ResolutionProbe(title=title, choices=choices, default_height=default_height)
+
+
+def _probe_score(probe: ResolutionProbe) -> tuple[int, int]:
+    max_height = probe.choices[0].height if probe.choices else 0
+    return max_height, len(probe.choices)
+
+
+def probe_resolutions(url: str, settings: Settings) -> ResolutionProbe:
+    _sync_cookies_or_fail(settings)
+    client_sets = _youtube_client_sets(settings) if _url_kind(url) == "youtube" else [settings.youtube_player_clients]
+
+    best_probe: ResolutionProbe | None = None
+    last_error: Exception | None = None
+    for clients in client_sets:
+        options = _base_ytdlp_options(url, settings, youtube_clients=clients)
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(url, download=False)
+        except Exception as exc:
+            last_error = exc
+            continue
+
+        probe = _probe_from_info(info or {})
+        if best_probe is None or _probe_score(probe) > _probe_score(best_probe):
+            best_probe = probe
+        if probe.default_height and probe.default_height >= DEFAULT_MAX_HEIGHT:
+            break
+
+    if best_probe is not None:
+        return best_probe
+
+    message = str(last_error) if last_error else "No formats were returned."
+    raise DownloadError(_friendly_download_error(url, message))
+
+
+def _download_with_options(url: str, options: dict[str, object]) -> dict[str, object]:
+    try:
+        with yt_dlp.YoutubeDL(options) as ydl:
+            info = ydl.extract_info(url, download=True)
+    except Exception as exc:
+        raise DownloadError(_friendly_download_error(url, str(exc))) from exc
+    return info or {}
 
 
 def download_video(url: str, settings: Settings, download_format: str | None = None) -> tuple[Path, str]:
@@ -187,23 +245,32 @@ def download_video(url: str, settings: Settings, download_format: str | None = N
 
     _sync_cookies_or_fail(settings, cleanup_dir=job_dir)
 
-    options = _base_ytdlp_options(url, settings)
-    options.update(
-        {
-            "format": download_format or settings.download_format or DEFAULT_DOWNLOAD_FORMAT,
-            "outtmpl": str(job_dir / "%(title).180B [%(id)s].%(ext)s"),
-            "merge_output_format": settings.merge_output_format,
-        }
-    )
+    selected_format = download_format or settings.download_format or DEFAULT_DOWNLOAD_FORMAT
+    client_sets = _youtube_client_sets(settings) if _url_kind(url) == "youtube" else [settings.youtube_player_clients]
 
-    try:
-        with yt_dlp.YoutubeDL(options) as ydl:
-            info = ydl.extract_info(url, download=True)
-    except Exception as exc:
+    info: dict[str, object] | None = None
+    last_error: DownloadError | None = None
+    for clients in client_sets:
+        options = _base_ytdlp_options(url, settings, youtube_clients=clients)
+        options.update(
+            {
+                "format": selected_format,
+                "outtmpl": str(job_dir / "%(title).180B [%(id)s].%(ext)s"),
+                "merge_output_format": settings.merge_output_format,
+            }
+        )
+        try:
+            info = _download_with_options(url, options)
+            break
+        except DownloadError as exc:
+            last_error = exc
+            if "requested format is not available" not in str(exc).lower():
+                break
+
+    if info is None:
         shutil.rmtree(job_dir, ignore_errors=True)
-        raise DownloadError(_friendly_download_error(url, str(exc))) from exc
+        raise last_error or DownloadError("Download failed.")
 
-    info = info or {}
 
     files = _media_files(job_dir)
     if not files:

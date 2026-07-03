@@ -257,6 +257,7 @@ set_1080p_original_defaults() {
   set_env_value "${env_file}" DOWNLOAD_FORMAT "${DEFAULT_DOWNLOAD_FORMAT}"
   set_env_value "${env_file}" MERGE_OUTPUT_FORMAT "mp4"
   set_env_value "${env_file}" UPLOAD_MODE "video"
+  set_env_value "${env_file}" YOUTUBE_PLAYER_CLIENTS "web,web_safari,ios,android"
 
   if systemctl is-active --quiet "${LOCAL_API_NAME}" 2>/dev/null; then
     set_env_value "${env_file}" MAX_UPLOAD_MB "1900"
@@ -315,7 +316,7 @@ ensure_upload_env() {
   grep -q '^COMPRESS_MIN_VIDEO_KBPS=' "${env_file}" || printf 'COMPRESS_MIN_VIDEO_KBPS=60\n' >> "${env_file}"
   grep -q '^YTDLP_FORCE_IPV4=' "${env_file}" || printf 'YTDLP_FORCE_IPV4=true\n' >> "${env_file}"
   grep -q '^YTDLP_HTTP_CHUNK_SIZE=' "${env_file}" || printf 'YTDLP_HTTP_CHUNK_SIZE=10M\n' >> "${env_file}"
-  grep -q '^YOUTUBE_PLAYER_CLIENTS=' "${env_file}" || printf 'YOUTUBE_PLAYER_CLIENTS=android,web\n' >> "${env_file}"
+  grep -q '^YOUTUBE_PLAYER_CLIENTS=' "${env_file}" || printf 'YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android\n' >> "${env_file}"
   grep -q '^TELEGRAM_RESOLUTION_MENU=' "${env_file}" || printf 'TELEGRAM_RESOLUTION_MENU=true\n' >> "${env_file}"
 }
 

@@ -201,6 +201,7 @@ switch_to_local_api() {
   set_env_value "${APP_DIR}/.env" BOT_API_BASE_URL "http://${LOCAL_API_HOST}:${LOCAL_API_PORT}"
   set_env_value "${APP_DIR}/.env" BOT_API_USE_LOCAL_FILE_URI "true"
   set_env_value "${APP_DIR}/.env" DOWNLOAD_FORMAT "${DEFAULT_DOWNLOAD_FORMAT}"
+  set_env_value "${APP_DIR}/.env" YOUTUBE_PLAYER_CLIENTS "web,web_safari,ios,android"
   set_env_value "${APP_DIR}/.env" MAX_UPLOAD_MB "1900"
   set_env_value "${APP_DIR}/.env" AUTO_COMPRESS "false"
 

@@ -18,8 +18,7 @@ def format_for_exact_height(height: int) -> str:
         f"bv*[height={height}][ext=mp4]+ba[ext=m4a]/"
         f"bv*[height={height}]+ba/"
         f"b[height={height}]/"
-        f"best[height={height}]/"
-        f"{format_for_max_height(height)}"
+        f"best[height={height}]"
     )
 
 
