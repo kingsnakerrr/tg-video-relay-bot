@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v34"
+APP_VERSION="v35"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -36,6 +36,8 @@ Usage / 用法:
   x doctor             Diagnose service and submit API / 诊断服务和提交接口
   x ytdlp-update       Update yt-dlp downloader / 更新 yt-dlp 下载器
   x ytdlp-version      Show yt-dlp version / 查看 yt-dlp 版本
+  x youtube-cookies-test URL
+                       Test YouTube cookies with yt-dlp / 用 yt-dlp 检测 YouTube cookies
   x mode               Show upload mode status / 查看上传模式状态
   x 1080p              Set 1080p no-compress defaults / 设置 1080p 不压缩
   x original           Switch to original-quality upload / 切到原画质不压缩上传
@@ -96,16 +98,17 @@ Actions / 操作菜单
 8) YouTube 1080p no-compress / YouTube 1080p 不压缩
 9) Original-quality upload settings / 原画质上传配置
 10) Update yt-dlp downloader / 更新 yt-dlp 下载器
-11) Local Bot API server / 本地 Bot API 服务
-12) Fix missing .env defaults / 补齐缺少的 .env 默认配置
-13) Test submit URL / 测试提交链接
-14) Sync cookies / 同步 cookies
-15) iPhone Shortcut settings / iPhone 快捷指令配置
-16) Edit config / 编辑配置
-17) Update / 更新
-18) Reinstall / 重装
-19) Uninstall service, keep files / 卸载服务但保留文件
-20) Purge everything / 彻底删除
+11) Test YouTube cookies / 检测 YouTube cookies
+12) Local Bot API server / 本地 Bot API 服务
+13) Fix missing .env defaults / 补齐缺少的 .env 默认配置
+14) Test submit URL / 测试提交链接
+15) Sync cookies / 同步 cookies
+16) iPhone Shortcut settings / iPhone 快捷指令配置
+17) Edit config / 编辑配置
+18) Update / 更新
+19) Reinstall / 重装
+20) Uninstall service, keep files / 卸载服务但保留文件
+21) Purge everything / 彻底删除
 0) Exit / 退出
 EOF
   echo
@@ -121,16 +124,17 @@ EOF
     8) run 1080p ;;
     9) run quality ;;
     10) run ytdlp-update ;;
-    11) run local-api ;;
-    12) run fix-env ;;
-    13) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
-    14) run cookies ;;
-    15) run shortcut ;;
-    16) run env ;;
-    17) run update ;;
-    18) run reinstall ;;
-    19) run uninstall ;;
-    20) run purge ;;
+    11) read -r -p "YouTube URL: " test_url; run youtube-cookies-test "${test_url}" ;;
+    12) run local-api ;;
+    13) run fix-env ;;
+    14) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
+    15) run cookies ;;
+    16) run shortcut ;;
+    17) run env ;;
+    18) run update ;;
+    19) run reinstall ;;
+    20) run uninstall ;;
+    21) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice. / 选择无效。"; exit 1 ;;
   esac
@@ -248,6 +252,70 @@ mode_status() {
   printf 'DOWNLOAD_FORMAT=%s\n' "$(env_value DOWNLOAD_FORMAT)"
   printf 'MAX_UPLOAD_MB=%s\n' "$(env_value MAX_UPLOAD_MB)"
   printf 'AUTO_COMPRESS=%s\n' "$(env_value AUTO_COMPRESS)"
+}
+
+youtube_cookies_test() {
+  need_root
+  ensure_env_defaults
+  url="${1:-}"
+  if [ -z "${url}" ]; then
+    url="https://www.youtube.com/watch?v=y3UWClkcvTA"
+  fi
+
+  cookie_path="$(env_value COOKIES_FILE_YOUTUBE)"
+  if [ -z "${cookie_path}" ]; then
+    cookie_path="$(env_value COOKIES_FILE)"
+  fi
+
+  echo "== YouTube cookies test / YouTube cookies 检测 =="
+  echo "Test URL / 测试链接: ${url}"
+  echo "Cookie file / Cookie 文件: ${cookie_path:-missing / 未设置}"
+  echo
+
+  if [ -z "${cookie_path}" ]; then
+    echo "FAIL / 失败: COOKIES_FILE_YOUTUBE is not set in ${APP_DIR}/.env"
+    echo "请在 .env 里设置: COOKIES_FILE_YOUTUBE=${APP_DIR}/cookies_youtube.txt"
+    exit 1
+  fi
+  if [ ! -f "${cookie_path}" ]; then
+    echo "FAIL / 失败: cookie file does not exist / 文件不存在"
+    echo "Upload your YouTube cookies to / 把 YouTube cookies 上传到: ${cookie_path}"
+    exit 1
+  fi
+
+  ls -lh "${cookie_path}"
+  perms="$(stat -c '%a' "${cookie_path}" 2>/dev/null || true)"
+  echo "Permission / 权限: ${perms:-unknown}"
+  if [ "${perms}" != "600" ]; then
+    echo "Tip / 建议: chmod 600 '${cookie_path}'"
+  fi
+
+  if grep -qi 'Netscape HTTP Cookie File' "${cookie_path}"; then
+    echo "Format / 格式: Netscape cookies.txt OK / 正确"
+  else
+    echo "FAIL / 失败: this does not look like Netscape cookies.txt"
+    echo "这不像 Netscape 格式 cookies.txt，可能是网页源码或 JSON。请用浏览器扩展导出 Netscape 格式。"
+    exit 1
+  fi
+
+  youtube_cookie_count="$(grep -Ei '(^|[[:space:]])\.?(youtube|google)\.com[[:space:]]' "${cookie_path}" | wc -l | tr -d ' ')"
+  echo "YouTube/Google cookie rows / YouTube 或 Google cookie 行数: ${youtube_cookie_count}"
+  if [ "${youtube_cookie_count}" = "0" ]; then
+    echo "FAIL / 失败: no youtube.com/google.com cookies found"
+    echo "文件里没有 YouTube/Google cookies，可能导错网站或导出失败。"
+    exit 1
+  fi
+
+  echo
+  echo "Running yt-dlp format probe / 正在用 yt-dlp 测试列出格式..."
+  echo "If this shows 1080p/1440p/2160p formats, cookies are at least readable."
+  echo "如果这里能列出 1080p/1440p/2160p，说明 cookies 至少能被 yt-dlp 读取。"
+  echo
+  "${APP_DIR}/.venv/bin/python" -m yt_dlp \
+    --cookies "${cookie_path}" \
+    --no-playlist \
+    --skip-download \
+    -F "${url}"
 }
 
 set_1080p_original_defaults() {
@@ -442,6 +510,9 @@ run() {
       ;;
     ytdlp-version|yt-dlp-version)
       "${APP_DIR}/.venv/bin/python" -m yt_dlp --version
+      ;;
+    youtube-cookies-test|youtube-cookie-test|ytcookie|yt-cookies)
+      youtube_cookies_test "${2:-}"
       ;;
     quality)
       env_file="${APP_DIR}/.env"

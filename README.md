@@ -12,6 +12,7 @@
 - 下载完成后可作为视频或文件发送
 - 上传成功或失败后都会自动清理本地任务文件
 - v34：YouTube 清晰度按钮会尽量过滤 yt-dlp 标记的 DRM/受限格式，并用具体非受限格式 ID 下载，减少误选 HDR/受限流导致失败
+- v35：新增 `x youtube-cookies-test URL`，可直接检测 YouTube cookies 文件、Netscape 格式和 yt-dlp 可解析清晰度
 - `/id` 查看当前用户和聊天 ID
 - `/targets` 查看当前转发目标数量
 - `/status` 查看队列状态
