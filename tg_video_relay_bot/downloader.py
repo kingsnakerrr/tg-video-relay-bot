@@ -9,7 +9,7 @@ import yt_dlp
 
 from .config import Settings
 from .cookie_sync import CookieSyncError, sync_cookies_if_needed
-from .formats import DEFAULT_DOWNLOAD_FORMAT, DEFAULT_MAX_HEIGHT, format_for_exact_height
+from .formats import DEFAULT_DOWNLOAD_FORMAT, DEFAULT_MAX_HEIGHT, SAFE_FALLBACK_DOWNLOAD_FORMAT
 
 
 TEMP_SUFFIXES = (".part", ".ytdl", ".temp", ".tmp")
@@ -70,6 +70,19 @@ def _headers_for(url: str) -> dict[str, str]:
 def _friendly_download_error(url: str, message: str) -> str:
     kind = _url_kind(url)
     lowered = message.lower()
+    if "drm" in lowered and "protected" in lowered:
+        return (
+            "yt-dlp 当前拿到的是 DRM/受限视频流，已避开已识别的 DRM 格式再试。"
+            "如果电脑 IDM 能下载，通常是浏览器登录状态、YouTube cookies、VPS IP 或客户端识别不同。"
+            "请更新 cookies_youtube.txt 后执行 `x cookies`、`x ytdlp-update`、`x restart`，"
+            "并优先选择非 HDR 的普通分辨率。"
+        )
+    if "requested format is not available" in lowered and kind == "youtube":
+        return (
+            "YouTube 当前没有返回这个清晰度对应的可下载格式。请先确认 "
+            "COOKIES_FILE_YOUTUBE=/opt/tg-video-relay-bot/cookies_youtube.txt 已上传且有效，"
+            "再执行 `x ytdlp-update`、`x restart`。"
+        )
     if "http error 403" in lowered or "forbidden" in lowered:
         if kind == "youtube":
             return (
@@ -184,8 +197,8 @@ def _base_ytdlp_options(
 
 def _probe_from_info(info: dict[str, object]) -> ResolutionProbe:
     formats = info.get("formats") or []
-    sizes_by_height: dict[int, int] = {}
-    audio_size = 0
+    video_by_height: dict[int, dict[str, object]] = {}
+    audio_choice: dict[str, object] | None = None
     try:
         duration = float(info.get("duration") or 0)
     except (TypeError, ValueError):
@@ -193,32 +206,39 @@ def _probe_from_info(info: dict[str, object]) -> ResolutionProbe:
     for item in formats:
         if not isinstance(item, dict):
             continue
+        if _format_has_drm(item):
+            continue
         vcodec = str(item.get("vcodec") or "")
         acodec = str(item.get("acodec") or "")
         size = _format_size_bytes(item, duration)
         if vcodec == "none":
-            if acodec != "none" and size > audio_size:
-                audio_size = size
+            if acodec != "none" and _format_id(item):
+                if audio_choice is None or _format_score(item, duration) > _format_score(audio_choice, duration):
+                    audio_choice = item
             continue
         try:
             height = int(item.get("height") or 0)
         except (TypeError, ValueError):
             continue
-        if height > 0:
-            sizes_by_height[height] = max(sizes_by_height.get(height, 0), size)
+        if height > 0 and _format_id(item):
+            current = video_by_height.get(height)
+            if current is None or _format_score(item, duration) > _format_score(current, duration):
+                video_by_height[height] = item
 
-    if not sizes_by_height:
+    if not video_by_height:
         height = int(info.get("height") or 0)
-        if height > 0:
-            sizes_by_height[height] = _format_size_bytes(info, duration)
+        if height > 0 and not _format_has_drm(info):
+            video_by_height[height] = info
 
-    sorted_heights = sorted(sizes_by_height, reverse=True)
+    audio_size = _format_size_bytes(audio_choice, duration) if audio_choice else 0
+    audio_id = _format_id(audio_choice) if audio_choice else None
+    sorted_heights = sorted(video_by_height, reverse=True)
     choices = [
         ResolutionChoice(
             height=height,
-            label=_resolution_label(height, sizes_by_height.get(height, 0), audio_size),
-            format_selector=format_for_exact_height(height),
-            size_label=_size_label(_combined_size(sizes_by_height.get(height, 0), audio_size)),
+            label=_resolution_label(height, _format_size_bytes(video_by_height[height], duration), audio_size),
+            format_selector=_format_selector_for_choice(video_by_height[height], audio_id),
+            size_label=_size_label(_combined_size(_format_size_bytes(video_by_height[height], duration), audio_size)),
         )
         for height in sorted_heights[:12]
     ]
@@ -228,7 +248,63 @@ def _probe_from_info(info: dict[str, object]) -> ResolutionProbe:
     return ResolutionProbe(title=title, choices=choices, default_height=default_height)
 
 
-def _format_size_bytes(item: dict[str, object], duration: float = 0) -> int:
+def _format_id(item: dict[str, object] | None) -> str | None:
+    if not item:
+        return None
+    value = str(item.get("format_id") or "").strip()
+    return value or None
+
+
+def _format_has_drm(item: dict[str, object]) -> bool:
+    for key in ("has_drm", "drm"):
+        value = item.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        if isinstance(value, str):
+            lowered = value.lower()
+            if lowered in {"1", "true", "yes", "drm", "protected"}:
+                return True
+    text_fields = (
+        str(item.get("protocol") or ""),
+        str(item.get("format") or ""),
+        str(item.get("format_note") or ""),
+    )
+    return any("drm" in value.lower() for value in text_fields)
+
+
+def _format_score(item: dict[str, object], duration: float) -> tuple[int, int, float, int]:
+    ext = str(item.get("ext") or "").lower()
+    vcodec = str(item.get("vcodec") or "")
+    acodec = str(item.get("acodec") or "")
+    try:
+        tbr = float(item.get("tbr") or 0)
+    except (TypeError, ValueError):
+        tbr = 0
+    return (
+        1 if ext == "mp4" else 0,
+        1 if vcodec != "none" and acodec != "none" else 0,
+        tbr,
+        _format_size_bytes(item, duration),
+    )
+
+
+def _format_selector_for_choice(video_item: dict[str, object], audio_id: str | None) -> str:
+    video_id = _format_id(video_item)
+    if not video_id:
+        return SAFE_FALLBACK_DOWNLOAD_FORMAT
+    acodec = str(video_item.get("acodec") or "")
+    if acodec != "none":
+        return video_id
+    if audio_id:
+        return f"{video_id}+{audio_id}/{video_id}"
+    return video_id
+
+
+def _format_size_bytes(item: dict[str, object] | None, duration: float = 0) -> int:
+    if item is None:
+        return 0
     for key in ("filesize", "filesize_approx"):
         value = item.get(key)
         try:
@@ -293,6 +369,8 @@ def probe_resolutions(url: str, settings: Settings) -> ResolutionProbe:
     last_error: Exception | None = None
     for clients in client_sets:
         options = _base_ytdlp_options(url, settings, youtube_clients=clients)
+        options["format"] = SAFE_FALLBACK_DOWNLOAD_FORMAT
+        options["ignore_no_formats_error"] = True
         try:
             with yt_dlp.YoutubeDL(options) as ydl:
                 info = ydl.extract_info(url, download=False)
@@ -330,26 +408,32 @@ def download_video(url: str, settings: Settings, download_format: str | None = N
     _sync_cookies_or_fail(settings, cleanup_dir=job_dir)
 
     selected_format = download_format or settings.download_format or DEFAULT_DOWNLOAD_FORMAT
+    format_attempts = [selected_format]
+    if SAFE_FALLBACK_DOWNLOAD_FORMAT not in format_attempts:
+        format_attempts.append(SAFE_FALLBACK_DOWNLOAD_FORMAT)
     client_sets = _youtube_client_sets(settings) if _url_kind(url) == "youtube" else [settings.youtube_player_clients]
 
     info: dict[str, object] | None = None
     last_error: DownloadError | None = None
-    for clients in client_sets:
-        options = _base_ytdlp_options(url, settings, youtube_clients=clients)
-        options.update(
-            {
-                "format": selected_format,
-                "outtmpl": str(job_dir / "%(title).180B [%(id)s].%(ext)s"),
-                "merge_output_format": settings.merge_output_format,
-            }
-        )
-        try:
-            info = _download_with_options(url, options)
-            break
-        except DownloadError as exc:
-            last_error = exc
-            if not _should_try_next_client(url, exc):
+    for format_selector in format_attempts:
+        for clients in client_sets:
+            options = _base_ytdlp_options(url, settings, youtube_clients=clients)
+            options.update(
+                {
+                    "format": format_selector,
+                    "outtmpl": str(job_dir / "%(title).180B [%(id)s].%(ext)s"),
+                    "merge_output_format": settings.merge_output_format,
+                }
+            )
+            try:
+                info = _download_with_options(url, options)
                 break
+            except DownloadError as exc:
+                last_error = exc
+                if not _should_try_next_client(url, exc):
+                    break
+        if info is not None:
+            break
 
     if info is None:
         shutil.rmtree(job_dir, ignore_errors=True)

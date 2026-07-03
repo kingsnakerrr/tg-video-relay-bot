@@ -100,20 +100,18 @@ class JobQueue:
             if failures:
                 self._reply(
                     job,
-                    "部分目标上传失败，本地文件已保留，方便你手动处理：\n"
-                    f"{file_path}\n\n"
+                    "部分目标上传失败，本地文件将自动删除，避免占用 VPS 空间：\n\n"
                     + "\n".join(failures[:8]),
                 )
-                if not self.settings.delete_after_all_uploads:
-                    cleanup_download(file_path)
                 return
 
-            cleanup_download(file_path)
-            self._reply(job, "全部目标上传成功，本地视频已删除。")
+            self._reply(job, "全部目标上传成功，本地视频将自动删除。")
         except Exception as exc:
             self._reply(job, f"任务失败：{exc}")
-            if file_path and file_path.exists() and not self.settings.delete_after_all_uploads:
+        finally:
+            if file_path and file_path.exists():
                 cleanup_download(file_path)
+                self._reply(job, "本次任务本地文件已清理。")
 
     def _upload_one(self, target_chat_id: int | str, file_path: Path, caption: str) -> None:
         if self.settings.upload_mode == "document":

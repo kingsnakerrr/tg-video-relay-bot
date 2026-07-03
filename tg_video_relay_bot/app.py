@@ -8,7 +8,7 @@ from typing import Any
 
 from .config import Settings, load_settings
 from .downloader import DownloadError, probe_resolutions
-from .formats import DEFAULT_DOWNLOAD_FORMAT, DEFAULT_MAX_HEIGHT
+from .formats import DEFAULT_DOWNLOAD_FORMAT, DEFAULT_MAX_HEIGHT, SAFE_FALLBACK_DOWNLOAD_FORMAT
 from .jobs import JobQueue, VideoJob
 from .links import extract_urls
 from .submit_server import SubmitServerError, start_submit_server
@@ -91,18 +91,28 @@ def _enqueue_default_job(
     url: str,
     *,
     reason: str | None = None,
+    safe_fallback: bool = False,
 ) -> None:
+    if safe_fallback:
+        download_format = SAFE_FALLBACK_DOWNLOAD_FORMAT
+        resolution_label = "自动可用格式 / 解析失败兜底"
+        queued_text = "已按自动可用格式加入队列"
+    else:
+        download_format = settings.download_format or DEFAULT_DOWNLOAD_FORMAT
+        resolution_label = "默认 1080p / 最高可用"
+        queued_text = "已按默认 1080p 加入队列"
+
     position = job_queue.enqueue(
         VideoJob(
             source_chat_id=chat_id,
             source_message_id=message_id,
             source_user_id=user_id,
             url=url,
-            download_format=settings.download_format or DEFAULT_DOWNLOAD_FORMAT,
-            resolution_label="默认 1080p / 最高可用",
+            download_format=download_format,
+            resolution_label=resolution_label,
         )
     )
-    text = f"已按默认 1080p 加入队列：{url}\n当前排队：{position}"
+    text = f"{queued_text}：{url}\n当前排队：{position}"
     if reason:
         text = f"{reason}\n{text}"
     api.send_message(chat_id, text, reply_to_message_id=message_id)
@@ -130,7 +140,8 @@ def _send_resolution_menu(
             message_id,
             user_id,
             url,
-            reason=f"获取清晰度失败，先按默认 1080p 下载：{exc}",
+            reason=f"获取清晰度失败，先按自动可用格式下载：{exc}",
+            safe_fallback=True,
         )
         return
 
@@ -145,8 +156,9 @@ def _send_resolution_menu(
     elif default_choice:
         default_label = f"默认 1080p（{default_choice.label}）"
 
+    default_format = default_choice.format_selector if default_choice else (settings.download_format or DEFAULT_DOWNLOAD_FORMAT)
     choices: dict[str, tuple[str, str]] = {
-        "auto": (settings.download_format or DEFAULT_DOWNLOAD_FORMAT, default_label),
+        "auto": (default_format, default_label),
     }
     for choice in probe.choices:
         choices[str(choice.height)] = (choice.format_selector, choice.label)
@@ -162,6 +174,7 @@ def _send_resolution_menu(
             row = []
     if row:
         keyboard.append(row)
+    keyboard.append([{"text": "取消下载", "callback_data": _callback_data(token, "cancel")}])
 
     pending[token] = PendingResolutionSelection(
         url=url,
@@ -178,7 +191,8 @@ def _send_resolution_menu(
         chat_id,
         "请选择下载清晰度：\n"
         f"{title}\n\n"
-        "默认会选最高 1080p；如果源视频低于 1080p，就自动选最高可用。大小是 yt-dlp 估算值。",
+        "默认会选最高 1080p；如果源视频低于 1080p，就自动选最高可用。"
+        "已尽量隐藏 DRM/受限格式，大小是 yt-dlp 估算值。",
         reply_to_message_id=message_id,
         reply_markup={"inline_keyboard": keyboard},
     )
@@ -213,6 +227,28 @@ def _handle_resolution_callback(
     selection = pending.get(token)
     if selection is None:
         api.answer_callback_query(callback_id, "这个选择已过期，请重新发送链接。", show_alert=True)
+        return True
+
+    if choice_key == "cancel":
+        pending.pop(token, None)
+        api.answer_callback_query(callback_id, "已取消下载。")
+        message = callback_query.get("message") or {}
+        chat = message.get("chat") or {}
+        callback_chat_id = chat.get("id")
+        callback_message_id = message.get("message_id")
+        if callback_chat_id is not None and callback_message_id is not None:
+            try:
+                api.edit_message_text(
+                    callback_chat_id,
+                    int(callback_message_id),
+                    f"已取消下载：{selection.url}",
+                )
+            except TelegramApiError:
+                api.send_message(
+                    selection.source_chat_id,
+                    f"已取消下载：{selection.url}",
+                    reply_to_message_id=selection.source_message_id,
+                )
         return True
 
     choice = selection.choices.get(choice_key)

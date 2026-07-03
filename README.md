@@ -1,6 +1,6 @@
 # Telegram Video Relay Bot
 
-把 X/Twitter、TikTok、抖音、YouTube 等公开视频链接转发给 Telegram 机器人，机器人会在 VPS 上下载视频，然后发送到配置好的多个频道或群组。所有目标发送成功后，本地视频会自动删除。
+把 X/Twitter、TikTok、抖音、YouTube 等公开视频链接转发给 Telegram 机器人，机器人会在 VPS 上下载视频，然后发送到配置好的多个频道或群组。任务结束后，本地视频会自动清理。
 
 请只下载和转发你拥有权利或已获授权的视频，并遵守平台条款。这个项目不绕过 DRM、付费墙或私密内容访问限制。
 
@@ -10,7 +10,8 @@
 - 支持多个目标频道/群组
 - 支持 `@channelusername` 和 `-100...` chat id
 - 下载完成后可作为视频或文件发送
-- 所有目标上传成功后自动删除本地文件
+- 上传成功或失败后都会自动清理本地任务文件
+- v34：YouTube 清晰度按钮会尽量过滤 yt-dlp 标记的 DRM/受限格式，并用具体非受限格式 ID 下载，减少误选 HDR/受限流导致失败
 - `/id` 查看当前用户和聊天 ID
 - `/targets` 查看当前转发目标数量
 - `/status` 查看队列状态
@@ -212,8 +213,11 @@ curl -L "你的COOKIE_SYNC_URL" | head
 - 上传失败：确认机器人在目标频道/群组里有发消息权限。
 - YouTube 默认最高 1080p：`DOWNLOAD_FORMAT=bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best`。想 1080p 且不压缩，先装好 Local Bot API，然后执行 `x 1080p`。
 - Telegram 里直接发链接会返回可下载清晰度按钮，点选后才开始下载。iPhone 快捷指令不会弹按钮，会直接按默认最高 1080p 下载；源视频不到 1080p 时自动拿最高可用。
+- 清晰度选择界面有“取消下载”按钮，X 和 YouTube 链接都支持。
+- 如果 YouTube 清晰度解析失败，机器人会先用“自动可用格式”兜底下载，避免任务直接死掉。想恢复 1080p/4K 选择，重点检查 `/opt/tg-video-relay-bot/cookies_youtube.txt` 是否有效。
 - 如果 YouTube 明明有 1080p/4K，但按钮只显示 360p，或选 1080p 后提示 403，通常是 YouTube 给 VPS/当前 yt-dlp client 限制了格式或下载地址。先执行 `x ytdlp-update`、`x 1080p`、`x restart`，再用 `x doctor` 确认 `YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android`；仍不行就给 `COOKIES_FILE` 配置 YouTube 登录 cookies。
 - 如果下载提示是 1080p，但上传后看着糊，先看机器人提示里的“上传文件”分辨率。公网 Bot API 模式超过约 50MB 会自动压缩，可能从 1080p 压到 720p/480p/360p。真正不压缩要安装并启用 Local Bot API，然后执行 `x original`。
+- 下载后无论上传成功、上传失败还是任务失败，本地任务文件都会自动清理，避免占用 VPS 空间。
 - 不想在 Telegram 里选清晰度：把 `.env` 里的 `TELEGRAM_RESOLUTION_MENU=false`，然后执行 `x restart`。
 - 视频太大：公网 Bot API 只能约 50MB；不想压缩请用 `x local-api` 安装本地 Bot API，再用 `x 1080p`。
 - Telegram 不识别视频：把 `UPLOAD_MODE=document`，会作为文件发送。

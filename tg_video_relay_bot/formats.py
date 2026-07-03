@@ -23,3 +23,4 @@ def format_for_exact_height(height: int) -> str:
 
 
 DEFAULT_DOWNLOAD_FORMAT = format_for_max_height()
+SAFE_FALLBACK_DOWNLOAD_FORMAT = "best/bv*+ba/b"
