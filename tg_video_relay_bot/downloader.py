@@ -387,6 +387,8 @@ def _should_try_next_client(url: str, error: DownloadError) -> bool:
         or "http error 403" in lowered
         or "403 forbidden" in lowered
         or "forbidden" in lowered
+        or "当前没有返回这个清晰度" in str(error)
+        or "drm/受限" in str(error).lower()
     )
 
 
@@ -520,6 +522,12 @@ def download_video(url: str, settings: Settings, download_format: str | None = N
                 last_error = exc
                 if not _should_try_next_client(url, exc):
                     break
+                LOGGER.info(
+                    "Trying next YouTube client after failure: url=%s format=%s failed_clients=%s",
+                    url,
+                    format_selector,
+                    ",".join(clients) or "default",
+                )
         if info is not None:
             break
 

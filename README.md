@@ -16,6 +16,7 @@
 - v36：明确选择清晰度后不再静默降级到低清 fallback，并在下载完成消息里显示 yt-dlp 实际 format id/分辨率
 - v37：新增 `x js-runtime-install` 安装 Deno，修复 yt-dlp 提示缺少 YouTube JavaScript runtime 导致格式缺失的问题
 - v38：新增 `x logs-recent`，并记录 YouTube 格式探测、实际下载 format selector、client 和 yt-dlp 原始错误
+- v39：修复 YouTube 某些格式只在 default client 可用时，下载阶段首个 client 失败后没有继续尝试其它 client 的问题
 - `/id` 查看当前用户和聊天 ID
 - `/targets` 查看当前转发目标数量
 - `/status` 查看队列状态
