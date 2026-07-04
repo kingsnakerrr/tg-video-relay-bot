@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v35"
+APP_VERSION="v37"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -36,6 +36,7 @@ Usage / 用法:
   x doctor             Diagnose service and submit API / 诊断服务和提交接口
   x ytdlp-update       Update yt-dlp downloader / 更新 yt-dlp 下载器
   x ytdlp-version      Show yt-dlp version / 查看 yt-dlp 版本
+  x js-runtime-install Install Deno for yt-dlp YouTube extraction / 安装 yt-dlp YouTube JS 运行时
   x youtube-cookies-test URL
                        Test YouTube cookies with yt-dlp / 用 yt-dlp 检测 YouTube cookies
   x mode               Show upload mode status / 查看上传模式状态
@@ -98,17 +99,18 @@ Actions / 操作菜单
 8) YouTube 1080p no-compress / YouTube 1080p 不压缩
 9) Original-quality upload settings / 原画质上传配置
 10) Update yt-dlp downloader / 更新 yt-dlp 下载器
-11) Test YouTube cookies / 检测 YouTube cookies
-12) Local Bot API server / 本地 Bot API 服务
-13) Fix missing .env defaults / 补齐缺少的 .env 默认配置
-14) Test submit URL / 测试提交链接
-15) Sync cookies / 同步 cookies
-16) iPhone Shortcut settings / iPhone 快捷指令配置
-17) Edit config / 编辑配置
-18) Update / 更新
-19) Reinstall / 重装
-20) Uninstall service, keep files / 卸载服务但保留文件
-21) Purge everything / 彻底删除
+11) Install yt-dlp JS runtime / 安装 yt-dlp JS 运行时
+12) Test YouTube cookies / 检测 YouTube cookies
+13) Local Bot API server / 本地 Bot API 服务
+14) Fix missing .env defaults / 补齐缺少的 .env 默认配置
+15) Test submit URL / 测试提交链接
+16) Sync cookies / 同步 cookies
+17) iPhone Shortcut settings / iPhone 快捷指令配置
+18) Edit config / 编辑配置
+19) Update / 更新
+20) Reinstall / 重装
+21) Uninstall service, keep files / 卸载服务但保留文件
+22) Purge everything / 彻底删除
 0) Exit / 退出
 EOF
   echo
@@ -124,17 +126,18 @@ EOF
     8) run 1080p ;;
     9) run quality ;;
     10) run ytdlp-update ;;
-    11) read -r -p "YouTube URL: " test_url; run youtube-cookies-test "${test_url}" ;;
-    12) run local-api ;;
-    13) run fix-env ;;
-    14) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
-    15) run cookies ;;
-    16) run shortcut ;;
-    17) run env ;;
-    18) run update ;;
-    19) run reinstall ;;
-    20) run uninstall ;;
-    21) run purge ;;
+    11) run js-runtime-install ;;
+    12) read -r -p "YouTube URL: " test_url; run youtube-cookies-test "${test_url}" ;;
+    13) run local-api ;;
+    14) run fix-env ;;
+    15) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
+    16) run cookies ;;
+    17) run shortcut ;;
+    18) run env ;;
+    19) run update ;;
+    20) run reinstall ;;
+    21) run uninstall ;;
+    22) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice. / 选择无效。"; exit 1 ;;
   esac
@@ -318,6 +321,29 @@ youtube_cookies_test() {
     -F "${url}"
 }
 
+install_js_runtime() {
+  need_root
+  if command -v deno >/dev/null 2>&1; then
+    echo "Deno is already installed. / Deno 已安装。"
+    deno --version
+    return
+  fi
+
+  echo "Installing Deno for yt-dlp YouTube extraction."
+  echo "正在安装 Deno，用于 yt-dlp 解析 YouTube。"
+  apt-get update
+  apt-get install -y unzip curl ca-certificates
+  tmp_dir="$(mktemp -d)"
+  curl -fsSL "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip" -o "${tmp_dir}/deno.zip"
+  unzip -o "${tmp_dir}/deno.zip" -d "${tmp_dir}"
+  install -m 755 "${tmp_dir}/deno" /usr/local/bin/deno
+  rm -rf "${tmp_dir}"
+  deno --version
+  echo
+  echo "Done. Run YouTube test again / 完成，请重新测试："
+  echo "  x youtube-cookies-test 'https://www.youtube.com/watch?v=y3UWClkcvTA'"
+}
+
 set_1080p_original_defaults() {
   need_root
   ensure_env_defaults
@@ -484,6 +510,12 @@ run() {
       printf 'COOKIES_FILE_YOUTUBE=%s\n' "$(env_value COOKIES_FILE_YOUTUBE)"
       printf 'COOKIES_FILE=%s\n' "$(env_value COOKIES_FILE)"
       printf 'TELEGRAM_RESOLUTION_MENU=%s\n' "$(env_value TELEGRAM_RESOLUTION_MENU)"
+      if command -v deno >/dev/null 2>&1; then
+        printf 'DENO=%s\n' "$(command -v deno)"
+        deno --version | head -n 1
+      else
+        echo "DENO=missing / 缺失，建议执行: x js-runtime-install"
+      fi
       echo
       echo "== Service / 服务 =="
       systemctl is-active "${APP_NAME}" || true
@@ -510,6 +542,9 @@ run() {
       ;;
     ytdlp-version|yt-dlp-version)
       "${APP_DIR}/.venv/bin/python" -m yt_dlp --version
+      ;;
+    js-runtime-install|js-install|deno-install)
+      install_js_runtime
       ;;
     youtube-cookies-test|youtube-cookie-test|ytcookie|yt-cookies)
       youtube_cookies_test "${2:-}"

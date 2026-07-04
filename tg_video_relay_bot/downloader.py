@@ -35,6 +35,13 @@ class ResolutionProbe:
     default_height: int | None
 
 
+@dataclass(frozen=True)
+class DownloadResult:
+    file_path: Path
+    title: str
+    format_summary: str
+
+
 def _url_kind(url: str) -> str:
     lowered = url.lower()
     if "youtube.com" in lowered or "youtu.be" in lowered:
@@ -208,6 +215,8 @@ def _probe_from_info(info: dict[str, object]) -> ResolutionProbe:
             continue
         if _format_has_drm(item):
             continue
+        if not _is_video_or_audio_format(item):
+            continue
         vcodec = str(item.get("vcodec") or "")
         acodec = str(item.get("acodec") or "")
         size = _format_size_bytes(item, duration)
@@ -272,6 +281,24 @@ def _format_has_drm(item: dict[str, object]) -> bool:
         str(item.get("format_note") or ""),
     )
     return any("drm" in value.lower() for value in text_fields)
+
+
+def _is_video_or_audio_format(item: dict[str, object]) -> bool:
+    ext = str(item.get("ext") or "").lower()
+    protocol = str(item.get("protocol") or "").lower()
+    format_note = str(item.get("format_note") or "").lower()
+    format_text = str(item.get("format") or "").lower()
+    vcodec = str(item.get("vcodec") or "").lower()
+    acodec = str(item.get("acodec") or "").lower()
+    if ext in {"mhtml", "html", "json"}:
+        return False
+    if "storyboard" in format_note or "storyboard" in format_text:
+        return False
+    if vcodec in {"images", "none"} and acodec in {"none", ""}:
+        return False
+    if protocol == "mhtml":
+        return False
+    return True
 
 
 def _format_score(item: dict[str, object], duration: float) -> tuple[int, int, float, int]:
@@ -400,7 +427,27 @@ def _download_with_options(url: str, options: dict[str, object]) -> dict[str, ob
     return info or {}
 
 
-def download_video(url: str, settings: Settings, download_format: str | None = None) -> tuple[Path, str]:
+def _download_format_summary(info: dict[str, object]) -> str:
+    format_id = str(info.get("format_id") or "unknown")
+    ext = str(info.get("ext") or "unknown")
+    resolution = str(info.get("resolution") or "")
+    width = info.get("width")
+    height = info.get("height")
+    if not resolution and width and height:
+        resolution = f"{width}x{height}"
+    vcodec = str(info.get("vcodec") or "")
+    acodec = str(info.get("acodec") or "")
+    parts = [f"format_id={format_id}", f"ext={ext}"]
+    if resolution:
+        parts.append(f"resolution={resolution}")
+    if vcodec:
+        parts.append(f"vcodec={vcodec}")
+    if acodec:
+        parts.append(f"acodec={acodec}")
+    return ", ".join(parts)
+
+
+def download_video(url: str, settings: Settings, download_format: str | None = None) -> DownloadResult:
     settings.download_dir.mkdir(parents=True, exist_ok=True)
     job_dir = settings.download_dir / uuid.uuid4().hex
     job_dir.mkdir(parents=True, exist_ok=False)
@@ -409,7 +456,8 @@ def download_video(url: str, settings: Settings, download_format: str | None = N
 
     selected_format = download_format or settings.download_format or DEFAULT_DOWNLOAD_FORMAT
     format_attempts = [selected_format]
-    if SAFE_FALLBACK_DOWNLOAD_FORMAT not in format_attempts:
+    allow_fallback = download_format is None
+    if allow_fallback and SAFE_FALLBACK_DOWNLOAD_FORMAT not in format_attempts:
         format_attempts.append(SAFE_FALLBACK_DOWNLOAD_FORMAT)
     client_sets = _youtube_client_sets(settings) if _url_kind(url) == "youtube" else [settings.youtube_player_clients]
 
@@ -447,7 +495,7 @@ def download_video(url: str, settings: Settings, download_format: str | None = N
 
     file_path = max(files, key=lambda item: item.stat().st_size)
     title = str(info.get("title") or file_path.stem)
-    return file_path, title
+    return DownloadResult(file_path=file_path, title=title, format_summary=_download_format_summary(info))
 
 
 def cleanup_download(file_path: Path) -> None:

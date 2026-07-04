@@ -69,7 +69,9 @@ class JobQueue:
 
         file_path: Path | None = None
         try:
-            file_path, title = download_video(job.url, self.settings, download_format=job.download_format)
+            result = download_video(job.url, self.settings, download_format=job.download_format)
+            file_path = result.file_path
+            title = result.title
             size_mb = file_path.stat().st_size / 1024 / 1024
             downloaded_info = probe_video_info(file_path)
             downloaded_label = downloaded_info.label if downloaded_info else "未知"
@@ -77,6 +79,7 @@ class JobQueue:
                 job,
                 f"下载完成：{title}\n"
                 f"下载文件：{downloaded_label}，{size_mb:.1f} MB\n"
+                f"yt-dlp 实际格式：{result.format_summary}\n"
                 f"开始上传到 {len(self.settings.target_chat_ids)} 个目标。",
             )
 
