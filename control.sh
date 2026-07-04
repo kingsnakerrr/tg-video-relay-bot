@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v37"
+APP_VERSION="v38"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -33,6 +33,7 @@ Usage / 用法:
   x restart            Restart the bot / 重启机器人
   x status             Show service status / 查看服务状态
   x logs               Follow live logs / 查看实时日志
+  x logs-recent        Show recent logs / 查看最近日志
   x doctor             Diagnose service and submit API / 诊断服务和提交接口
   x ytdlp-update       Update yt-dlp downloader / 更新 yt-dlp 下载器
   x ytdlp-version      Show yt-dlp version / 查看 yt-dlp 版本
@@ -619,6 +620,10 @@ run() {
       ;;
     logs|log)
       journalctl -u "${APP_NAME}" -f
+      ;;
+    logs-recent|recent-logs)
+      lines="${2:-120}"
+      journalctl -u "${APP_NAME}" -n "${lines}" --no-pager
       ;;
     test-submit|test)
       need_root

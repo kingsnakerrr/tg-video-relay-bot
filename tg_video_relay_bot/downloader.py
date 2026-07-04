@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import shutil
 import uuid
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ from .formats import DEFAULT_DOWNLOAD_FORMAT, DEFAULT_MAX_HEIGHT, SAFE_FALLBACK_
 
 TEMP_SUFFIXES = (".part", ".ytdl", ".temp", ".tmp")
 YOUTUBE_FALLBACK_PLAYER_CLIENTS = ("web", "web_safari", "ios", "android", "tv")
+LOGGER = logging.getLogger(__name__)
 
 
 class DownloadError(RuntimeError):
@@ -398,14 +400,29 @@ def probe_resolutions(url: str, settings: Settings) -> ResolutionProbe:
         options = _base_ytdlp_options(url, settings, youtube_clients=clients)
         options["format"] = SAFE_FALLBACK_DOWNLOAD_FORMAT
         options["ignore_no_formats_error"] = True
+        LOGGER.info("Probing formats: url=%s clients=%s", url, ",".join(clients) or "default")
         try:
             with yt_dlp.YoutubeDL(options) as ydl:
                 info = ydl.extract_info(url, download=False)
         except Exception as exc:
             last_error = exc
+            LOGGER.warning(
+                "Format probe failed: url=%s clients=%s error=%s",
+                url,
+                ",".join(clients) or "default",
+                exc,
+            )
             continue
 
         probe = _probe_from_info(info or {})
+        LOGGER.info(
+            "Format probe result: url=%s clients=%s title=%r choices=%s default=%s",
+            url,
+            ",".join(clients) or "default",
+            probe.title,
+            ", ".join(f"{choice.height}p[{choice.format_selector}]" for choice in probe.choices),
+            probe.default_height,
+        )
         if best_probe is None or _probe_score(probe) > _probe_score(best_probe):
             best_probe = probe
         if probe.default_height and probe.default_height >= DEFAULT_MAX_HEIGHT:
@@ -423,6 +440,15 @@ def _download_with_options(url: str, options: dict[str, object]) -> dict[str, ob
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=True)
     except Exception as exc:
+        LOGGER.warning(
+            "yt-dlp download failed: url=%s format=%s clients=%s error=%s",
+            url,
+            options.get("format"),
+            (options.get("extractor_args") or {}).get("youtube", {}).get("player_client", "default")
+            if isinstance(options.get("extractor_args"), dict)
+            else "default",
+            exc,
+        )
         raise DownloadError(_friendly_download_error(url, str(exc))) from exc
     return info or {}
 
@@ -465,6 +491,13 @@ def download_video(url: str, settings: Settings, download_format: str | None = N
     last_error: DownloadError | None = None
     for format_selector in format_attempts:
         for clients in client_sets:
+            LOGGER.info(
+                "Downloading video: url=%s format=%s clients=%s allow_fallback=%s",
+                url,
+                format_selector,
+                ",".join(clients) or "default",
+                allow_fallback,
+            )
             options = _base_ytdlp_options(url, settings, youtube_clients=clients)
             options.update(
                 {
@@ -475,6 +508,13 @@ def download_video(url: str, settings: Settings, download_format: str | None = N
             )
             try:
                 info = _download_with_options(url, options)
+                LOGGER.info(
+                    "Download succeeded: url=%s format=%s clients=%s result=%s",
+                    url,
+                    format_selector,
+                    ",".join(clients) or "default",
+                    _download_format_summary(info),
+                )
                 break
             except DownloadError as exc:
                 last_error = exc
