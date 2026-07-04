@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -50,20 +51,25 @@ def _looks_like_netscape_cookies(content: bytes) -> bool:
     return False
 
 
-def sync_cookies_if_needed(settings: Settings, *, force: bool = False) -> str | None:
-    if not settings.cookie_sync_url:
-        return None
-    if settings.cookies_file_x is not None:
-        cookies_file = settings.cookies_file_x
-    elif settings.cookies_file is not None:
-        cookies_file = settings.cookies_file
-    else:
-        raise CookieSyncError("COOKIE_SYNC_URL is set, but COOKIES_FILE_X and COOKIES_FILE are empty.")
+def _direct_download_url(url: str) -> str:
+    match = re.search(r"drive\.google\.com/file/d/([^/]+)/", url)
+    if match:
+        return f"https://drive.google.com/uc?export=download&id={match.group(1)}"
+    return url
 
+
+def _sync_one_cookie_file(
+    url: str,
+    cookies_file: Path,
+    *,
+    label: str,
+    interval_minutes: int,
+    force: bool,
+) -> str | None:
     state_file = _state_path(cookies_file)
     state = _read_state(state_file)
     now = int(time.time())
-    interval = settings.cookie_sync_interval_minutes * 60
+    interval = interval_minutes * 60
 
     if not force and cookies_file.exists() and now - int(state.get("last_check", 0)) < interval:
         return None
@@ -77,18 +83,18 @@ def sync_cookies_if_needed(settings: Settings, *, force: bool = False) -> str | 
     if state.get("last_modified"):
         headers["If-Modified-Since"] = str(state["last_modified"])
 
-    response = requests.get(settings.cookie_sync_url, headers=headers, timeout=60)
+    response = requests.get(_direct_download_url(url), headers=headers, timeout=60)
     if response.status_code == 304:
         state["last_check"] = now
         _write_state(state_file, state)
-        return "cookies.txt not changed."
+        return f"{label} cookies not changed."
     if response.status_code >= 400:
-        raise CookieSyncError(f"Cookie sync failed: HTTP {response.status_code}")
+        raise CookieSyncError(f"{label} cookie sync failed: HTTP {response.status_code}")
 
     content = response.content
     if not _looks_like_netscape_cookies(content):
         raise CookieSyncError(
-            "Downloaded cookie file does not look like Netscape cookies.txt. "
+            f"Downloaded {label} cookie file does not look like Netscape cookies.txt. "
             "Use a direct file link, not a preview page."
         )
 
@@ -96,7 +102,7 @@ def sync_cookies_if_needed(settings: Settings, *, force: bool = False) -> str | 
     if cookies_file.exists() and digest == state.get("sha256"):
         state["last_check"] = now
         _write_state(state_file, state)
-        return "cookies.txt already current."
+        return f"{label} cookies already current."
 
     cookies_file.parent.mkdir(parents=True, exist_ok=True)
     temp_path = cookies_file.with_name(f".{cookies_file.name}.tmp")
@@ -113,7 +119,46 @@ def sync_cookies_if_needed(settings: Settings, *, force: bool = False) -> str | 
         "bytes": len(content),
     }
     _write_state(state_file, state)
-    return f"cookies.txt synced: {len(content)} bytes."
+    return f"{label} cookies synced: {len(content)} bytes -> {cookies_file}"
+
+
+def sync_cookies_if_needed(settings: Settings, *, force: bool = False) -> str | None:
+    jobs: list[tuple[str, Path, str]] = []
+
+    if settings.cookie_sync_url_x:
+        if settings.cookies_file_x is None:
+            raise CookieSyncError("COOKIE_SYNC_URL_X is set, but COOKIES_FILE_X is empty.")
+        jobs.append((settings.cookie_sync_url_x, settings.cookies_file_x, "X"))
+
+    if settings.cookie_sync_url_youtube:
+        if settings.cookies_file_youtube is None:
+            raise CookieSyncError("COOKIE_SYNC_URL_YOUTUBE is set, but COOKIES_FILE_YOUTUBE is empty.")
+        jobs.append((settings.cookie_sync_url_youtube, settings.cookies_file_youtube, "YouTube"))
+
+    if not jobs and settings.cookie_sync_url:
+        if settings.cookies_file_x is not None:
+            cookies_file = settings.cookies_file_x
+        elif settings.cookies_file is not None:
+            cookies_file = settings.cookies_file
+        else:
+            raise CookieSyncError("COOKIE_SYNC_URL is set, but COOKIES_FILE_X and COOKIES_FILE are empty.")
+        jobs.append((settings.cookie_sync_url, cookies_file, "legacy"))
+
+    if not jobs:
+        return None
+
+    messages: list[str] = []
+    for url, cookies_file, label in jobs:
+        message = _sync_one_cookie_file(
+            url,
+            cookies_file,
+            label=label,
+            interval_minutes=settings.cookie_sync_interval_minutes,
+            force=force,
+        )
+        if message:
+            messages.append(message)
+    return "\n".join(messages) if messages else None
 
 
 def main() -> None:
@@ -123,7 +168,7 @@ def main() -> None:
     except CookieSyncError as exc:
         print(f"Cookie sync failed: {exc}", file=sys.stderr)
         sys.exit(1)
-    print(message or "COOKIE_SYNC_URL is empty; nothing to sync.")
+    print(message or "COOKIE_SYNC_URL_X/COOKIE_SYNC_URL_YOUTUBE are empty; nothing to sync.")
 
 
 if __name__ == "__main__":

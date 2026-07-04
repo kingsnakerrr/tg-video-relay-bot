@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v39"
+APP_VERSION="v40"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -51,6 +51,7 @@ Usage / 用法:
   x fix-env            Add missing default .env keys / 补齐缺少的 .env 默认配置
   x test-submit URL    Submit one URL from the VPS itself / 在 VPS 本机测试提交链接
   x cookies            Sync cookies.txt now / 立即同步 cookies.txt
+  x cookies-config     Edit X/YouTube cookie sync links / 配置 X/YouTube cookies 同步链接
   x shortcut           Show iPhone Shortcut submit settings / 查看 iPhone 快捷指令配置
   x env                Edit .env config / 编辑 .env 配置
   x update             Pull latest code and restart / 更新代码并重启
@@ -105,13 +106,14 @@ Actions / 操作菜单
 13) Local Bot API server / 本地 Bot API 服务
 14) Fix missing .env defaults / 补齐缺少的 .env 默认配置
 15) Test submit URL / 测试提交链接
-16) Sync cookies / 同步 cookies
-17) iPhone Shortcut settings / iPhone 快捷指令配置
-18) Edit config / 编辑配置
-19) Update / 更新
-20) Reinstall / 重装
-21) Uninstall service, keep files / 卸载服务但保留文件
-22) Purge everything / 彻底删除
+16) Sync cookies now / 立即同步 cookies
+17) Cookie sync settings / Cookies 同步设置
+18) iPhone Shortcut settings / iPhone 快捷指令配置
+19) Edit config / 编辑配置
+20) Update / 更新
+21) Reinstall / 重装
+22) Uninstall service, keep files / 卸载服务但保留文件
+23) Purge everything / 彻底删除
 0) Exit / 退出
 EOF
   echo
@@ -133,12 +135,13 @@ EOF
     14) run fix-env ;;
     15) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
     16) run cookies ;;
-    17) run shortcut ;;
-    18) run env ;;
-    19) run update ;;
-    20) run reinstall ;;
-    21) run uninstall ;;
-    22) run purge ;;
+    17) run cookies-config ;;
+    18) run shortcut ;;
+    19) run env ;;
+    20) run update ;;
+    21) run reinstall ;;
+    22) run uninstall ;;
+    23) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice. / 选择无效。"; exit 1 ;;
   esac
@@ -322,6 +325,41 @@ youtube_cookies_test() {
     -F "${url}"
 }
 
+cookie_sync_config() {
+  need_root
+  ensure_env_defaults
+  env_file="${APP_DIR}/.env"
+  [ -f "${env_file}" ] || { echo "${env_file} not found."; exit 1; }
+
+  echo "Current cookie sync settings / 当前 cookies 同步设置:"
+  echo "  COOKIES_FILE_X=$(env_value COOKIES_FILE_X)"
+  echo "  COOKIE_SYNC_URL_X=$(env_value COOKIE_SYNC_URL_X)"
+  echo "  COOKIES_FILE_YOUTUBE=$(env_value COOKIES_FILE_YOUTUBE)"
+  echo "  COOKIE_SYNC_URL_YOUTUBE=$(env_value COOKIE_SYNC_URL_YOUTUBE)"
+  echo "  COOKIE_SYNC_INTERVAL_MINUTES=$(env_value COOKIE_SYNC_INTERVAL_MINUTES)"
+  echo
+  echo "Paste Google Drive share links or direct file links. Press Enter to keep current."
+  echo "可粘贴 Google Drive 分享链接或文件直链；直接回车保留当前值。"
+  echo
+
+  current_x="$(env_value COOKIE_SYNC_URL_X)"
+  current_youtube="$(env_value COOKIE_SYNC_URL_YOUTUBE)"
+  current_interval="$(env_value COOKIE_SYNC_INTERVAL_MINUTES)"
+  read -r -p "X cookies sync link / X cookies 同步链接 [keep / 保留]: " new_x
+  read -r -p "YouTube cookies sync link / YouTube cookies 同步链接 [keep / 保留]: " new_youtube
+  read -r -p "Sync interval minutes / 同步间隔分钟 [${current_interval:-360}]: " new_interval
+
+  [ -n "${new_x}" ] && set_env_value "${env_file}" COOKIE_SYNC_URL_X "${new_x}"
+  [ -n "${new_youtube}" ] && set_env_value "${env_file}" COOKIE_SYNC_URL_YOUTUBE "${new_youtube}"
+  [ -n "${new_interval}" ] && set_env_value "${env_file}" COOKIE_SYNC_INTERVAL_MINUTES "${new_interval}"
+
+  echo
+  echo "Saved. Run manual sync now with / 已保存。现在可手动同步："
+  echo "  x cookies"
+  echo "Then restart bot with / 然后重启机器人："
+  echo "  x restart"
+}
+
 install_js_runtime() {
   need_root
   if command -v deno >/dev/null 2>&1; then
@@ -431,6 +469,10 @@ ensure_upload_env() {
   grep -q '^YOUTUBE_PLAYER_CLIENTS=' "${env_file}" || printf 'YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android\n' >> "${env_file}"
   grep -q '^COOKIES_FILE_X=' "${env_file}" || printf 'COOKIES_FILE_X=%s/cookies_x.txt\n' "${APP_DIR}" >> "${env_file}"
   grep -q '^COOKIES_FILE_YOUTUBE=' "${env_file}" || printf 'COOKIES_FILE_YOUTUBE=%s/cookies_youtube.txt\n' "${APP_DIR}" >> "${env_file}"
+  grep -q '^COOKIE_SYNC_URL=' "${env_file}" || printf 'COOKIE_SYNC_URL=\n' >> "${env_file}"
+  grep -q '^COOKIE_SYNC_URL_X=' "${env_file}" || printf 'COOKIE_SYNC_URL_X=\n' >> "${env_file}"
+  grep -q '^COOKIE_SYNC_URL_YOUTUBE=' "${env_file}" || printf 'COOKIE_SYNC_URL_YOUTUBE=\n' >> "${env_file}"
+  grep -q '^COOKIE_SYNC_INTERVAL_MINUTES=' "${env_file}" || printf 'COOKIE_SYNC_INTERVAL_MINUTES=360\n' >> "${env_file}"
   if [ "$(env_value COOKIES_FILE)" = "${APP_DIR}/cookies.txt" ]; then
     set_env_value "${env_file}" COOKIES_FILE ""
   fi
@@ -510,6 +552,9 @@ run() {
       printf 'COOKIES_FILE_X=%s\n' "$(env_value COOKIES_FILE_X)"
       printf 'COOKIES_FILE_YOUTUBE=%s\n' "$(env_value COOKIES_FILE_YOUTUBE)"
       printf 'COOKIES_FILE=%s\n' "$(env_value COOKIES_FILE)"
+      [ -n "$(env_value COOKIE_SYNC_URL_X)" ] && echo "COOKIE_SYNC_URL_X=set / 已设置" || echo "COOKIE_SYNC_URL_X=empty / 未设置"
+      [ -n "$(env_value COOKIE_SYNC_URL_YOUTUBE)" ] && echo "COOKIE_SYNC_URL_YOUTUBE=set / 已设置" || echo "COOKIE_SYNC_URL_YOUTUBE=empty / 未设置"
+      printf 'COOKIE_SYNC_INTERVAL_MINUTES=%s\n' "$(env_value COOKIE_SYNC_INTERVAL_MINUTES)"
       printf 'TELEGRAM_RESOLUTION_MENU=%s\n' "$(env_value TELEGRAM_RESOLUTION_MENU)"
       if command -v deno >/dev/null 2>&1; then
         printf 'DENO=%s\n' "$(command -v deno)"
@@ -646,6 +691,9 @@ run() {
       need_root
       cd "${APP_DIR}"
       "${APP_DIR}/.venv/bin/python" -m tg_video_relay_bot.cookie_sync
+      ;;
+    cookies-config|cookie-config|sync-cookies-config)
+      cookie_sync_config
       ;;
     shortcut|submit)
       need_root

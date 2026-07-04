@@ -17,6 +17,7 @@
 - v37：新增 `x js-runtime-install` 安装 Deno，修复 yt-dlp 提示缺少 YouTube JavaScript runtime 导致格式缺失的问题
 - v38：新增 `x logs-recent`，并记录 YouTube 格式探测、实际下载 format selector、client 和 yt-dlp 原始错误
 - v39：修复 YouTube 某些格式只在 default client 可用时，下载阶段首个 client 失败后没有继续尝试其它 client 的问题
+- v40：新增 X/YouTube 独立 cookies 同步链接配置，支持 Google Drive 分享链接自动转直链，菜单可手动配置和同步
 - `/id` 查看当前用户和聊天 ID
 - `/targets` 查看当前转发目标数量
 - `/status` 查看队列状态
@@ -42,6 +43,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/kingsnakerrr/tg-video-relay-
 - Telegram Bot Token
 - 目标频道/群组 ID，多个用英文逗号隔开
 - 管理员 Telegram 用户 ID，多个用英文逗号隔开
+- X cookies 同步链接，可回车跳过
+- YouTube cookies 同步链接，可回车跳过
+- Local Bot API `api_id` 和 `api_hash`，可回车跳过，后面还能用 `x local-api` 配置
 
 安装完成后直接输入：
 
@@ -182,17 +186,20 @@ COOKIES_FILE_X=/opt/tg-video-relay-bot/cookies_x.txt
 COOKIES_FILE_YOUTUBE=/opt/tg-video-relay-bot/cookies_youtube.txt
 ```
 
-也可以让 VPS 从你的 OneDrive/OpenList 私密直链自动同步 X cookies：
+也可以让 VPS 从你的 Google Drive/OneDrive/OpenList 私密直链自动同步 cookies：
 
 ```env
 COOKIES_FILE_X=/opt/tg-video-relay-bot/cookies_x.txt
-COOKIE_SYNC_URL=https://你的私密直链/cookies.txt
+COOKIES_FILE_YOUTUBE=/opt/tg-video-relay-bot/cookies_youtube.txt
+COOKIE_SYNC_URL_X=https://你的私密直链/cookies_x.txt
+COOKIE_SYNC_URL_YOUTUBE=https://你的私密直链/cookies_youtube.txt
 COOKIE_SYNC_INTERVAL_MINUTES=360
 ```
 
-保存后执行：
+Google Drive 的 `/file/d/.../view?...` 分享链接可以直接填，脚本会自动转换为下载链接。保存后执行：
 
 ```bash
+x cookies-config
 x cookies
 x restart
 ```
@@ -200,7 +207,7 @@ x restart
 检查链接是不是直链：
 
 ```bash
-curl -L "你的COOKIE_SYNC_URL" | head
+curl -L "你的COOKIE_SYNC_URL_X" | head
 ```
 
 正确内容通常会看到：
@@ -209,7 +216,7 @@ curl -L "你的COOKIE_SYNC_URL" | head
 # Netscape HTTP Cookie File
 ```
 
-如果看到 `<html`、登录页、OneDrive 预览页，就不是直链。OpenList 建议使用文件的直接下载地址；OneDrive 分享页通常不是直链。
+如果看到 `<html`、登录页、OneDrive 预览页，就不是直链。OpenList 建议使用文件的直接下载地址；Google Drive 分享页会由脚本自动转下载链接。
 
 不要把 cookie 文件提交到公开仓库，也不要使用任何人都能访问的公开直链。
 

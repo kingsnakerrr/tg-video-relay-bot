@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v39"
+APP_VERSION="v40"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -10,7 +10,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-04.9"
+INSTALLER_VERSION="2026-07-04.10"
 
 die() {
   echo "ERROR: $*" >&2
@@ -150,6 +150,7 @@ if [ ! -f .env ]; then
   echo "  Telegram Bot Token / Telegram 机器人 Token"
   echo "  Target channel/group IDs / 目标频道或群组 ID，多个用英文逗号分隔"
   echo "  Admin Telegram user IDs / 管理员 Telegram 用户 ID，多个用英文逗号分隔"
+  echo "  Optional X/YouTube cookie sync links / 可选 X 和 YouTube cookies 同步直链"
   echo "  Optional Local Bot API credentials / 可选本地 Bot API 的 api_id 和 api_hash"
   echo "Default mode is Public Bot API. You can switch later with x local-api-switch."
   echo "默认先使用公网 Bot API 模式，Local Bot API 安装成功后可用 x local-api-switch 切换。"
@@ -157,6 +158,8 @@ if [ ! -f .env ]; then
   BOT_TOKEN="$(ask_required "Telegram Bot Token / Telegram 机器人 Token")"
   TARGET_CHAT_IDS="$(ask_required "Target channel/group IDs, comma separated / 目标频道或群组 ID，多个用英文逗号分隔")"
   ALLOWED_USER_IDS="$(ask_required "Admin Telegram user IDs, comma separated / 管理员 Telegram 用户 ID，多个用英文逗号分隔")"
+  read -r -p "Optional X cookies sync link, press Enter to skip / 可选 X cookies 同步链接，回车跳过: " COOKIE_SYNC_URL_X
+  read -r -p "Optional YouTube cookies sync link, press Enter to skip / 可选 YouTube cookies 同步链接，回车跳过: " COOKIE_SYNC_URL_YOUTUBE
   read -r -p "Optional Local Bot API ID, press Enter to skip / 可选 Local Bot API ID，回车跳过: " LOCAL_API_ID
   if [ -n "${LOCAL_API_ID}" ]; then
     read -r -s -p "Optional Local Bot API hash / 可选 Local Bot API hash: " LOCAL_API_HASH
@@ -196,6 +199,8 @@ COOKIES_FILE=
 COOKIES_FILE_X=${APP_DIR}/cookies_x.txt
 COOKIES_FILE_YOUTUBE=${APP_DIR}/cookies_youtube.txt
 COOKIE_SYNC_URL=
+COOKIE_SYNC_URL_X=${COOKIE_SYNC_URL_X}
+COOKIE_SYNC_URL_YOUTUBE=${COOKIE_SYNC_URL_YOUTUBE}
 COOKIE_SYNC_INTERVAL_MINUTES=360
 UPLOAD_MODE=video
 DELETE_AFTER_ALL_UPLOADS=true
@@ -235,6 +240,8 @@ grep -q '^COOKIES_FILE=' .env || printf 'COOKIES_FILE=\n' >> .env
 grep -q '^COOKIES_FILE_X=' .env || printf 'COOKIES_FILE_X=%s/cookies_x.txt\n' "${APP_DIR}" >> .env
 grep -q '^COOKIES_FILE_YOUTUBE=' .env || printf 'COOKIES_FILE_YOUTUBE=%s/cookies_youtube.txt\n' "${APP_DIR}" >> .env
 grep -q '^COOKIE_SYNC_URL=' .env || printf 'COOKIE_SYNC_URL=\n' >> .env
+grep -q '^COOKIE_SYNC_URL_X=' .env || printf 'COOKIE_SYNC_URL_X=\n' >> .env
+grep -q '^COOKIE_SYNC_URL_YOUTUBE=' .env || printf 'COOKIE_SYNC_URL_YOUTUBE=\n' >> .env
 grep -q '^COOKIE_SYNC_INTERVAL_MINUTES=' .env || printf 'COOKIE_SYNC_INTERVAL_MINUTES=360\n' >> .env
 grep -q '^SUBMIT_API_ENABLED=' .env || printf 'SUBMIT_API_ENABLED=true\n' >> .env
 grep -q '^SUBMIT_API_HOST=' .env || printf 'SUBMIT_API_HOST=0.0.0.0\n' >> .env

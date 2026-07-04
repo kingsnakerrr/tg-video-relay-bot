@@ -114,6 +114,8 @@ class Settings:
     cookies_file_x: Path | None
     cookies_file_youtube: Path | None
     cookie_sync_url: str
+    cookie_sync_url_x: str
+    cookie_sync_url_youtube: str
     cookie_sync_interval_minutes: int
     submit_api_enabled: bool
     submit_api_host: str
@@ -185,6 +187,8 @@ def load_settings() -> Settings:
         cookies_file_x=cookies_file_x,
         cookies_file_youtube=cookies_file_youtube,
         cookie_sync_url=os.getenv("COOKIE_SYNC_URL", "").strip(),
+        cookie_sync_url_x=os.getenv("COOKIE_SYNC_URL_X", "").strip(),
+        cookie_sync_url_youtube=os.getenv("COOKIE_SYNC_URL_YOUTUBE", "").strip(),
         cookie_sync_interval_minutes=max(1, _env_int("COOKIE_SYNC_INTERVAL_MINUTES", 360)),
         submit_api_enabled=_env_bool("SUBMIT_API_ENABLED", True),
         submit_api_host=os.getenv("SUBMIT_API_HOST", "0.0.0.0").strip() or "0.0.0.0",
