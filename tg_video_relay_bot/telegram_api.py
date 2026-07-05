@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +15,9 @@ class TelegramApiError(RuntimeError):
     pass
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 class TelegramApi:
     def __init__(
         self,
@@ -22,11 +27,13 @@ class TelegramApi:
         *,
         base_url: str = "https://api.telegram.org",
         use_local_file_uri: bool = False,
+        retries: int = 3,
     ) -> None:
         self.base_url = f"{base_url.rstrip('/')}/bot{token}"
         self.timeout = timeout
         self.upload_timeout = upload_timeout
         self.use_local_file_uri = use_local_file_uri
+        self.retries = max(1, retries)
 
     def _request(
         self,
@@ -36,12 +43,40 @@ class TelegramApi:
         files: dict[str, Any] | None = None,
         timeout: int | None = None,
     ) -> dict[str, Any]:
-        response = requests.post(
-            f"{self.base_url}/{method}",
-            data=data,
-            files=files,
-            timeout=timeout or self.timeout,
-        )
+        response: requests.Response | None = None
+        last_error: Exception | None = None
+        for attempt in range(1, self.retries + 1):
+            if files:
+                for item in files.values():
+                    handle = item[1] if isinstance(item, tuple) and len(item) >= 2 else item
+                    if hasattr(handle, "seek"):
+                        handle.seek(0)
+            try:
+                response = requests.post(
+                    f"{self.base_url}/{method}",
+                    data=data,
+                    files=files,
+                    timeout=timeout or self.timeout,
+                )
+                if response.status_code < 500:
+                    break
+                last_error = TelegramApiError(f"{method} HTTP {response.status_code}")
+            except requests.RequestException as exc:
+                last_error = exc
+
+            if attempt < self.retries:
+                wait_seconds = min(2 * attempt, 10)
+                LOGGER.warning(
+                    "Telegram API request failed, retrying: method=%s attempt=%s/%s error=%s",
+                    method,
+                    attempt,
+                    self.retries,
+                    last_error,
+                )
+                time.sleep(wait_seconds)
+
+        if response is None:
+            raise TelegramApiError(f"{method} failed after {self.retries} attempts: {last_error}")
         if response.status_code == 413:
             raise TelegramApiError(
                 f"{method} failed: file is too large for Telegram Bot API. "

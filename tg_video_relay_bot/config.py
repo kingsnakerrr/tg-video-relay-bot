@@ -126,6 +126,7 @@ class Settings:
     delete_after_all_uploads: bool
     bot_api_timeout: int
     upload_timeout: int
+    upload_retries: int
     poll_timeout: int
     worker_count: int
     telegram_resolution_menu: bool
@@ -199,6 +200,7 @@ def load_settings() -> Settings:
         delete_after_all_uploads=_env_bool("DELETE_AFTER_ALL_UPLOADS", True),
         bot_api_timeout=_env_int("BOT_API_TIMEOUT", 30),
         upload_timeout=_env_int("UPLOAD_TIMEOUT", 1800),
+        upload_retries=max(1, _env_int("UPLOAD_RETRIES", 3)),
         poll_timeout=_env_int("POLL_TIMEOUT", 50),
         worker_count=max(1, _env_int("WORKER_COUNT", 1)),
         telegram_resolution_menu=_env_bool("TELEGRAM_RESOLUTION_MENU", True),

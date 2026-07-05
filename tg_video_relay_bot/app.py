@@ -390,6 +390,7 @@ def run_bot(settings: Settings) -> None:
         settings.upload_timeout,
         base_url=settings.bot_api_base_url,
         use_local_file_uri=settings.bot_api_use_local_file_uri,
+        retries=settings.upload_retries,
     )
     job_queue = JobQueue(api, settings)
     job_queue.start()

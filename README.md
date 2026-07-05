@@ -18,6 +18,7 @@
 - v38：新增 `x logs-recent`，并记录 YouTube 格式探测、实际下载 format selector、client 和 yt-dlp 原始错误
 - v39：修复 YouTube 某些格式只在 default client 可用时，下载阶段首个 client 失败后没有继续尝试其它 client 的问题
 - v40：新增 X/YouTube 独立 cookies 同步链接配置，支持 Google Drive 分享链接自动转直链，菜单可手动配置和同步
+- v41：Telegram 上传遇到连接中断、RemoteDisconnected 或 5xx 时自动重试，默认 `UPLOAD_RETRIES=3`
 - `/id` 查看当前用户和聊天 ID
 - `/targets` 查看当前转发目标数量
 - `/status` 查看队列状态
