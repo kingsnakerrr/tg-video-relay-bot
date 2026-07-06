@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import logging
 import secrets
+import subprocess
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from .config import Settings, load_settings
@@ -13,11 +15,15 @@ from .jobs import JobQueue, VideoJob
 from .links import extract_urls
 from .submit_server import SubmitServerError, start_submit_server
 from .telegram_api import TelegramApi, TelegramApiError
+from .version import APP_VERSION
 
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 RESOLUTION_CALLBACK_PREFIX = "res"
+ADMIN_CALLBACK_PREFIX = "cmd"
 PENDING_SELECTION_TTL_SECONDS = 30 * 60
+SERVICE_NAME = "telegram-video-relay"
+CONTROL_SCRIPT = Path("control.sh")
 
 
 @dataclass(frozen=True)
@@ -79,6 +85,102 @@ def _short_text(text: str, limit: int = 120) -> str:
     if len(text) <= limit:
         return text
     return f"{text[: limit - 1]}…"
+
+
+def _admin_callback_data(action: str) -> str:
+    return f"{ADMIN_CALLBACK_PREFIX}:{action}"
+
+
+def _admin_keyboard() -> dict[str, Any]:
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "状态", "callback_data": _admin_callback_data("status")},
+                {"text": "最近日志", "callback_data": _admin_callback_data("logs")},
+            ],
+            [
+                {"text": "同步 cookies", "callback_data": _admin_callback_data("cookies")},
+                {"text": "更新 yt-dlp", "callback_data": _admin_callback_data("ytdlp")},
+            ],
+            [
+                {"text": "更新项目", "callback_data": _admin_callback_data("update")},
+                {"text": "重启机器人", "callback_data": _admin_callback_data("restart")},
+            ],
+            [
+                {"text": "停止/暂停", "callback_data": _admin_callback_data("stop")},
+                {"text": "帮助", "callback_data": _admin_callback_data("help")},
+            ],
+        ]
+    }
+
+
+def _run_command(args: list[str], *, timeout: int = 20) -> str:
+    try:
+        completed = subprocess.run(
+            args,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except Exception as exc:
+        return f"命令执行失败：{exc}"
+    output = "\n".join(part for part in (completed.stdout.strip(), completed.stderr.strip()) if part)
+    if not output:
+        output = f"exit={completed.returncode}"
+    return _short_text(output, 3500)
+
+
+def _run_control_background(action: str) -> None:
+    script = CONTROL_SCRIPT.resolve()
+    if script.exists():
+        args = ["bash", str(script), action]
+    else:
+        args = ["systemctl", action, SERVICE_NAME]
+    subprocess.Popen(
+        args,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+def _admin_help_text() -> str:
+    return (
+        f"Telegram Video Relay {APP_VERSION}\n\n"
+        "管理员命令：\n"
+        "/menu - 打开按钮菜单\n"
+        "/help - 显示帮助和按钮\n"
+        "/status - 查看队列和服务状态\n"
+        "/logs - 最近日志\n"
+        "/cookies - 手动同步 cookies\n"
+        "/ytdlp - 更新 yt-dlp\n"
+        "/update - 更新项目并重启\n"
+        "/restart - 重启机器人\n"
+        "/stop - 停止/暂停机器人\n"
+        "/id - 查看你的用户 ID 和当前聊天 ID\n"
+        "/targets - 查看转发目标数量\n\n"
+        "停止后机器人无法在 TG 里接收 /start，启动请 SSH 执行：x start"
+    )
+
+
+def _admin_status_text(settings: Settings, job_queue: JobQueue) -> str:
+    service_status = _run_command(["systemctl", "is-active", SERVICE_NAME], timeout=5).strip()
+    upload_mode = "Local Bot API 原画质" if settings.bot_api_use_local_file_uri else "公网 Bot API"
+    return (
+        f"Telegram Video Relay {APP_VERSION}\n"
+        f"服务状态：{service_status}\n"
+        f"当前排队：{job_queue.pending_count()}\n"
+        f"目标数量：{len(settings.target_chat_ids)}\n"
+        f"上传模式：{upload_mode}\n"
+        f"MAX_UPLOAD_MB={settings.max_upload_mb}\n"
+        f"AUTO_COMPRESS={settings.auto_compress}\n"
+        f"UPLOAD_RETRIES={settings.upload_retries}\n"
+        f"X cookies：{settings.cookies_file_x or '未设置'}\n"
+        f"YouTube cookies：{settings.cookies_file_youtube or '未设置'}"
+    )
 
 
 def _enqueue_default_job(
@@ -290,6 +392,84 @@ def _handle_resolution_callback(
     return True
 
 
+def _handle_admin_callback(
+    api: TelegramApi,
+    settings: Settings,
+    job_queue: JobQueue,
+    callback_query: dict[str, Any],
+) -> bool:
+    data = str(callback_query.get("data") or "")
+    if not data.startswith(f"{ADMIN_CALLBACK_PREFIX}:"):
+        return False
+
+    callback_id = str(callback_query.get("id") or "")
+    callback_user = callback_query.get("from") or {}
+    user_id = int(callback_user["id"]) if callback_user.get("id") is not None else None
+    if not _is_allowed(settings, user_id):
+        api.answer_callback_query(callback_id, "你没有管理权限。", show_alert=True)
+        return True
+
+    action = data.split(":", 1)[1]
+    message = callback_query.get("message") or {}
+    chat = message.get("chat") or {}
+    chat_id = chat.get("id")
+    message_id = message.get("message_id")
+
+    def reply(text: str, *, menu: bool = False) -> None:
+        if chat_id is None:
+            return
+        markup = _admin_keyboard() if menu else None
+        if message_id is not None:
+            try:
+                api.edit_message_text(chat_id, int(message_id), text, reply_markup=markup)
+                return
+            except TelegramApiError:
+                pass
+        api.send_message(chat_id, text, reply_markup=markup)
+
+    if action == "help":
+        api.answer_callback_query(callback_id, "帮助")
+        reply(_admin_help_text(), menu=True)
+        return True
+    if action == "status":
+        api.answer_callback_query(callback_id, "状态")
+        reply(_admin_status_text(settings, job_queue), menu=True)
+        return True
+    if action == "logs":
+        api.answer_callback_query(callback_id, "最近日志")
+        logs = _run_command(["journalctl", "-u", SERVICE_NAME, "-n", "60", "--no-pager"], timeout=10)
+        reply(f"最近日志：\n{logs}", menu=True)
+        return True
+    if action == "cookies":
+        api.answer_callback_query(callback_id, "开始同步 cookies")
+        reply("已开始同步 cookies，完成后请看日志或再次点状态。", menu=True)
+        _run_control_background("cookies")
+        return True
+    if action == "ytdlp":
+        api.answer_callback_query(callback_id, "开始更新 yt-dlp")
+        reply("已开始更新 yt-dlp，完成后机器人会重启。", menu=True)
+        _run_control_background("ytdlp-update")
+        return True
+    if action == "update":
+        api.answer_callback_query(callback_id, "开始更新项目")
+        reply("已开始更新项目，完成后机器人会重启。", menu=True)
+        _run_control_background("update")
+        return True
+    if action == "restart":
+        api.answer_callback_query(callback_id, "正在重启")
+        reply("正在重启机器人。")
+        _run_control_background("restart")
+        return True
+    if action == "stop":
+        api.answer_callback_query(callback_id, "正在停止")
+        reply("正在停止/暂停机器人。停止后 TG 里不能再启动，请 SSH 执行：x start")
+        _run_control_background("stop")
+        return True
+
+    api.answer_callback_query(callback_id, "未知操作。", show_alert=True)
+    return True
+
+
 def _handle_command(
     api: TelegramApi,
     settings: Settings,
@@ -303,10 +483,30 @@ def _handle_command(
     user_id = _user_id(message)
 
     if command == "/start":
+        if _is_allowed(settings, user_id):
+            api.send_message(
+                chat_id,
+                "发给我 X/Twitter、TikTok、抖音或 YouTube 链接，我会下载后转发到配置好的频道/群组。\n\n管理员可点下面菜单操作。",
+                reply_to_message_id=message_id,
+                reply_markup=_admin_keyboard(),
+            )
+        else:
+            api.send_message(
+                chat_id,
+                "发给我 X/Twitter、TikTok、抖音或 YouTube 链接，我会下载后转发到配置好的频道/群组。",
+                reply_to_message_id=message_id,
+            )
+        return True
+
+    if command in {"/help", "/menu"}:
+        if not _is_allowed(settings, user_id):
+            api.send_message(chat_id, "你没有管理权限。", reply_to_message_id=message_id)
+            return True
         api.send_message(
             chat_id,
-            "发给我 X/Twitter、TikTok、抖音或 YouTube 链接，我会下载后转发到配置好的频道/群组。",
+            _admin_help_text() if command == "/help" else _admin_status_text(settings, job_queue),
             reply_to_message_id=message_id,
+            reply_markup=_admin_keyboard(),
         )
         return True
 
@@ -333,9 +533,52 @@ def _handle_command(
             return True
         api.send_message(
             chat_id,
-            f"当前排队任务：{job_queue.pending_count()}",
+            _admin_status_text(settings, job_queue),
             reply_to_message_id=message_id,
+            reply_markup=_admin_keyboard(),
         )
+        return True
+
+    if command == "/logs":
+        if not _is_allowed(settings, user_id):
+            return True
+        logs = _run_command(["journalctl", "-u", SERVICE_NAME, "-n", "60", "--no-pager"], timeout=10)
+        api.send_message(chat_id, f"最近日志：\n{logs}", reply_to_message_id=message_id, reply_markup=_admin_keyboard())
+        return True
+
+    if command == "/cookies":
+        if not _is_allowed(settings, user_id):
+            return True
+        api.send_message(chat_id, "已开始同步 cookies。", reply_to_message_id=message_id, reply_markup=_admin_keyboard())
+        _run_control_background("cookies")
+        return True
+
+    if command == "/ytdlp":
+        if not _is_allowed(settings, user_id):
+            return True
+        api.send_message(chat_id, "已开始更新 yt-dlp，完成后机器人会重启。", reply_to_message_id=message_id)
+        _run_control_background("ytdlp-update")
+        return True
+
+    if command == "/update":
+        if not _is_allowed(settings, user_id):
+            return True
+        api.send_message(chat_id, "已开始更新项目，完成后机器人会重启。", reply_to_message_id=message_id)
+        _run_control_background("update")
+        return True
+
+    if command == "/restart":
+        if not _is_allowed(settings, user_id):
+            return True
+        api.send_message(chat_id, "正在重启机器人。", reply_to_message_id=message_id)
+        _run_control_background("restart")
+        return True
+
+    if command == "/stop":
+        if not _is_allowed(settings, user_id):
+            return True
+        api.send_message(chat_id, "正在停止/暂停机器人。停止后 TG 里不能再启动，请 SSH 执行：x start", reply_to_message_id=message_id)
+        _run_control_background("stop")
         return True
 
     return False
@@ -396,6 +639,25 @@ def run_bot(settings: Settings) -> None:
     job_queue.start()
     pending_resolution_selections: dict[str, PendingResolutionSelection] = {}
 
+    try:
+        api.set_my_commands(
+            [
+                {"command": "menu", "description": "打开管理员按钮菜单"},
+                {"command": "help", "description": "显示所有命令"},
+                {"command": "status", "description": "查看状态"},
+                {"command": "logs", "description": "查看最近日志"},
+                {"command": "cookies", "description": "同步 cookies"},
+                {"command": "ytdlp", "description": "更新 yt-dlp"},
+                {"command": "update", "description": "更新项目并重启"},
+                {"command": "restart", "description": "重启机器人"},
+                {"command": "stop", "description": "停止/暂停机器人"},
+                {"command": "id", "description": "查看用户和聊天 ID"},
+                {"command": "targets", "description": "查看转发目标"},
+            ]
+        )
+    except TelegramApiError as exc:
+        logging.warning("Failed to set bot commands: %s", exc)
+
     if settings.submit_api_enabled:
         try:
             start_submit_server(settings, job_queue)
@@ -413,6 +675,13 @@ def run_bot(settings: Settings) -> None:
             for update in updates:
                 offset = int(update["update_id"]) + 1
                 callback_query = _callback_query_from_update(update)
+                if callback_query and _handle_admin_callback(
+                    api,
+                    settings,
+                    job_queue,
+                    callback_query,
+                ):
+                    continue
                 if callback_query and _handle_resolution_callback(
                     api,
                     settings,

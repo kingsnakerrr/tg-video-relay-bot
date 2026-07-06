@@ -158,6 +158,12 @@ class TelegramApi:
             data["text"] = text
         self._request("answerCallbackQuery", data=data)
 
+    def set_my_commands(self, commands: list[dict[str, str]]) -> None:
+        self._request(
+            "setMyCommands",
+            data={"commands": json.dumps(commands, ensure_ascii=False)},
+        )
+
     def send_video(
         self,
         chat_id: int | str,

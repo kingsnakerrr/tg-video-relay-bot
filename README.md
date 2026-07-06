@@ -19,6 +19,7 @@
 - v39：修复 YouTube 某些格式只在 default client 可用时，下载阶段首个 client 失败后没有继续尝试其它 client 的问题
 - v40：新增 X/YouTube 独立 cookies 同步链接配置，支持 Google Drive 分享链接自动转直链，菜单可手动配置和同步
 - v41：Telegram 上传遇到连接中断、RemoteDisconnected 或 5xx 时自动重试，默认 `UPLOAD_RETRIES=3`
+- v42：新增 Telegram 机器人内管理员按钮菜单和斜杠菜单，可在 TG 里执行状态、日志、更新、重启、停止、同步 cookies 等操作
 - `/id` 查看当前用户和聊天 ID
 - `/targets` 查看当前转发目标数量
 - `/status` 查看队列状态
@@ -99,6 +100,26 @@ python -m tg_video_relay_bot
 3. 频道里要把机器人设为管理员，并允许发消息/发视频。
 4. 给机器人发送 `/id`，把返回的用户 ID 填进 `ALLOWED_USER_IDS`。
 5. 群组/频道的数字 ID 通常是 `-100...`。你也可以对公开频道使用 `@channelusername`。
+
+## Telegram 内控制命令
+
+管理员可以直接在 Telegram 机器人里发送：
+
+```text
+/menu      打开按钮菜单
+/help      显示所有命令
+/status    查看状态
+/logs      查看最近日志
+/cookies   手动同步 cookies
+/ytdlp     更新 yt-dlp
+/update    更新项目并重启
+/restart   重启机器人
+/stop      停止/暂停机器人
+/id        查看用户和聊天 ID
+/targets   查看转发目标
+```
+
+`/menu` 会显示可点击按钮。注意：点 `/stop` 后机器人停止，Telegram 里无法再收到启动命令，需要 SSH 执行 `x start`。
 
 ## iPhone 快捷指令入口
 
