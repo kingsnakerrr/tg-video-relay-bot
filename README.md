@@ -24,6 +24,7 @@
 - v44：安装时自动尝试安装 Deno/yt-dlp JS runtime，失败也继续安装；安装结束显示手动安装、swap 虚拟内存和低内存 Local Bot API 编译命令
 - v45：安装步骤失败会自动重试一次；Local Bot API 默认按低内存方式安装，`BUILD_JOBS=1` 并自动准备 swap，失败后提示重新安装命令
 - v46：修复 Debian trixie/Python 3.13 删除 `cgi` 标准库导致 HTTP submit API 启动失败的问题
+- v47：安装时可输入下载视频缓存目录，安装后可用 `x download-dir` 查看和修改
 - `/id` 查看当前用户和聊天 ID
 - `/targets` 查看当前转发目标数量
 - `/status` 查看队列状态
@@ -63,6 +64,26 @@ x
 
 ```bash
 x logs
+```
+
+### 下载视频缓存目录
+
+安装时会提示输入下载视频缓存目录。默认是安装目录下的 `downloads`，例如：
+
+```text
+/data/opt/tg-video-relay-bot/downloads
+```
+
+这里保存的是下载完成、上传到 Telegram 前的临时视频文件。任务完成后会按配置自动清理。安装后可以随时查看或修改：
+
+```bash
+x download-dir
+```
+
+也可以直接编辑 `.env`：
+
+```env
+DOWNLOAD_DIR=/data/opt/tg-video-relay-bot/downloads
 ```
 
 ### 安装失败重试和低内存 Local Bot API

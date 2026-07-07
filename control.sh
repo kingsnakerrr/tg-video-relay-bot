@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v46"
+APP_VERSION="v47"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -42,6 +42,7 @@ Usage / 用法:
   x test-submit URL    Submit one URL from the VPS itself / 在 VPS 本机测试提交链接
   x cookies            Sync cookies now / 立即同步 cookies
   x cookies-menu       Show/change/sync cookie links / 查看、修改、同步 cookies
+  x download-dir       Show/change download cache directory / 查看或修改下载缓存目录
   x low-memory-help    Show swap and low-memory build commands / 显示 swap 和低内存编译命令
   x shortcut           Show iPhone Shortcut submit settings / 查看 iPhone 快捷指令配置
   x env                Edit .env config / 编辑 .env 配置
@@ -95,11 +96,12 @@ Actions / 操作菜单
 11) Test submit X URL / 测试提交 X 链接
 12) Test submit YouTube URL / 测试提交 YouTube 链接
 13) iPhone Shortcut settings / iPhone 快捷指令配置
-14) Edit config / 编辑配置
-15) Update / 更新
-16) Reinstall / 重装
-17) Uninstall service, keep files / 卸载服务但保留文件
-18) Purge everything / 彻底删除
+14) Download/cache directory / 下载缓存目录
+15) Edit config / 编辑配置
+16) Update / 更新
+17) Reinstall / 重装
+18) Uninstall service, keep files / 卸载服务但保留文件
+19) Purge everything / 彻底删除
 0) Exit / 退出
 EOF
   echo
@@ -118,11 +120,12 @@ EOF
     11) read -r -p "X URL: " test_url; run test-submit "${test_url}" ;;
     12) read -r -p "YouTube URL: " test_url; run test-submit "${test_url}" ;;
     13) run shortcut ;;
-    14) run env ;;
-    15) run update ;;
-    16) run reinstall ;;
-    17) run uninstall ;;
-    18) run purge ;;
+    14) run download-dir ;;
+    15) run env ;;
+    16) run update ;;
+    17) run reinstall ;;
+    18) run uninstall ;;
+    19) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice. / 选择无效。"; exit 1 ;;
   esac
@@ -394,6 +397,45 @@ cookie_sync_config() {
   menu
 }
 
+download_dir_config() {
+  need_root
+  ensure_env_defaults
+  env_file="${APP_DIR}/.env"
+  [ -f "${env_file}" ] || { echo "${env_file} not found."; exit 1; }
+
+  current_dir="$(env_value DOWNLOAD_DIR)"
+  [ -n "${current_dir}" ] || current_dir="${APP_DIR}/downloads"
+
+  echo "Download/cache directory / 下载缓存目录"
+  echo "Current / 当前: ${current_dir}"
+  if [ -d "${current_dir}" ]; then
+    echo "Exists / 已存在: yes / 是"
+    du -sh "${current_dir}" 2>/dev/null || true
+  else
+    echo "Exists / 已存在: no / 否"
+  fi
+  echo
+  echo "This is where temporary downloaded videos are stored before upload."
+  echo "这里是视频下载后、上传前的临时缓存目录。任务结束后会按配置清理。"
+  echo
+  read -r -p "Change download/cache directory? [y/N] / 是否修改下载缓存目录？[y/N]: " change_dir
+  if [[ ! "${change_dir}" =~ ^[Yy]$ ]]; then
+    return
+  fi
+
+  read -r -p "New directory / 新目录: " new_dir
+  if [ -z "${new_dir}" ]; then
+    echo "Empty path, cancelled. / 路径为空，已取消。"
+    return
+  fi
+
+  mkdir -p "${new_dir}"
+  set_env_value "${env_file}" DOWNLOAD_DIR "${new_dir}"
+  systemctl restart "${APP_NAME}" 2>/dev/null || true
+  echo "Updated DOWNLOAD_DIR=${new_dir}"
+  echo "已更新下载缓存目录并重启服务。"
+}
+
 switch_upload_mode() {
   need_root
   ensure_env_defaults
@@ -561,6 +603,7 @@ ensure_upload_env() {
   [ -f "${env_file}" ] || return
   grep -q '^BOT_API_BASE_URL=' "${env_file}" || printf 'BOT_API_BASE_URL=https://api.telegram.org\n' >> "${env_file}"
   grep -q '^BOT_API_USE_LOCAL_FILE_URI=' "${env_file}" || printf 'BOT_API_USE_LOCAL_FILE_URI=false\n' >> "${env_file}"
+  grep -q '^DOWNLOAD_DIR=' "${env_file}" || printf 'DOWNLOAD_DIR=%s/downloads\n' "${APP_DIR}" >> "${env_file}"
   grep -q '^MAX_UPLOAD_MB=' "${env_file}" || printf 'MAX_UPLOAD_MB=49\n' >> "${env_file}"
   grep -q '^DOWNLOAD_FORMAT=' "${env_file}" || printf 'DOWNLOAD_FORMAT=%s\n' "${DEFAULT_DOWNLOAD_FORMAT}" >> "${env_file}"
   grep -q '^AUTO_COMPRESS=' "${env_file}" || printf 'AUTO_COMPRESS=true\n' >> "${env_file}"
@@ -649,6 +692,7 @@ run() {
       echo "== Upload API .env / 上传接口配置 =="
       printf 'BOT_API_BASE_URL=%s\n' "$(env_value BOT_API_BASE_URL)"
       printf 'BOT_API_USE_LOCAL_FILE_URI=%s\n' "$(env_value BOT_API_USE_LOCAL_FILE_URI)"
+      printf 'DOWNLOAD_DIR=%s\n' "$(env_value DOWNLOAD_DIR)"
       printf 'DOWNLOAD_FORMAT=%s\n' "$(env_value DOWNLOAD_FORMAT)"
       printf 'MAX_UPLOAD_MB=%s\n' "$(env_value MAX_UPLOAD_MB)"
       printf 'AUTO_COMPRESS=%s\n' "$(env_value AUTO_COMPRESS)"
@@ -808,6 +852,9 @@ run() {
       ;;
     cookies-menu|cookies-config|cookie-config|sync-cookies-config)
       cookie_sync_config
+      ;;
+    download-dir|download-cache|cache-dir)
+      download_dir_config
       ;;
     shortcut|submit)
       need_root

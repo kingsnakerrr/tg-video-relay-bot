@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v46"
+APP_VERSION="v47"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -10,7 +10,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-07.1"
+INSTALLER_VERSION="2026-07-07.2"
 DENO_INSTALL_STATUS="skipped"
 
 retry_or_die() {
@@ -205,6 +205,7 @@ if [ ! -f .env ]; then
   echo "  Telegram Bot Token / Telegram 机器人 Token"
   echo "  Target channel/group IDs / 目标频道或群组 ID，多个用英文逗号分隔"
   echo "  Admin Telegram user IDs / 管理员 Telegram 用户 ID，多个用英文逗号分隔"
+  echo "  Download/cache directory / 下载视频缓存目录"
   echo "  Optional X/YouTube cookie sync links / 可选 X 和 YouTube cookies 同步直链"
   echo "  Optional Local Bot API credentials / 可选本地 Bot API 的 api_id 和 api_hash"
   echo "Default mode is Public Bot API. You can switch later with x local-api-switch."
@@ -213,6 +214,9 @@ if [ ! -f .env ]; then
   BOT_TOKEN="$(ask_required "Telegram Bot Token / Telegram 机器人 Token")"
   TARGET_CHAT_IDS="$(ask_required "Target channel/group IDs, comma separated / 目标频道或群组 ID，多个用英文逗号分隔")"
   ALLOWED_USER_IDS="$(ask_required "Admin Telegram user IDs, comma separated / 管理员 Telegram 用户 ID，多个用英文逗号分隔")"
+  DEFAULT_DOWNLOAD_DIR="${APP_DIR}/downloads"
+  read -r -p "Download/cache directory [${DEFAULT_DOWNLOAD_DIR}] / 下载视频缓存目录 [${DEFAULT_DOWNLOAD_DIR}]: " DOWNLOAD_DIR_INPUT
+  DOWNLOAD_DIR_VALUE="${DOWNLOAD_DIR_INPUT:-${DEFAULT_DOWNLOAD_DIR}}"
   read -r -p "Optional X cookies sync link, press Enter to skip / 可选 X cookies 同步链接，回车跳过: " COOKIE_SYNC_URL_X
   read -r -p "Optional YouTube cookies sync link, press Enter to skip / 可选 YouTube cookies 同步链接，回车跳过: " COOKIE_SYNC_URL_YOUTUBE
   read -r -p "Optional Local Bot API ID, press Enter to skip / 可选 Local Bot API ID，回车跳过: " LOCAL_API_ID
@@ -239,7 +243,7 @@ BOT_API_BASE_URL=https://api.telegram.org
 BOT_API_USE_LOCAL_FILE_URI=false
 TARGET_CHAT_IDS=${TARGET_CHAT_IDS}
 ALLOWED_USER_IDS=${ALLOWED_USER_IDS}
-DOWNLOAD_DIR=downloads
+DOWNLOAD_DIR=${DOWNLOAD_DIR_VALUE}
 DOWNLOAD_FORMAT=bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best
 MERGE_OUTPUT_FORMAT=mp4
 MAX_FILE_MB=1900
@@ -276,6 +280,7 @@ else
 fi
 
 grep -q '^MAX_UPLOAD_MB=' .env || printf '\nMAX_UPLOAD_MB=49\n' >> .env
+grep -q '^DOWNLOAD_DIR=' .env || printf 'DOWNLOAD_DIR=%s/downloads\n' "${APP_DIR}" >> .env
 grep -q '^DOWNLOAD_FORMAT=' .env || printf 'DOWNLOAD_FORMAT=bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best\n' >> .env
 grep -q '^BOT_API_BASE_URL=' .env || printf 'BOT_API_BASE_URL=https://api.telegram.org\n' >> .env
 grep -q '^BOT_API_USE_LOCAL_FILE_URI=' .env || printf 'BOT_API_USE_LOCAL_FILE_URI=false\n' >> .env
@@ -312,6 +317,9 @@ if ! grep -q '^SUBMIT_API_SECRET=' .env || grep -q '^SUBMIT_API_SECRET=$' .env; 
   fi
 fi
 grep -q '^SUBMIT_NOTIFY_CHAT_ID=' .env || printf 'SUBMIT_NOTIFY_CHAT_ID=\n' >> .env
+DOWNLOAD_DIR_CURRENT="$(grep -E '^DOWNLOAD_DIR=' .env | tail -n 1 | cut -d= -f2-)"
+[ -n "${DOWNLOAD_DIR_CURRENT}" ] || DOWNLOAD_DIR_CURRENT="${APP_DIR}/downloads"
+mkdir -p "${DOWNLOAD_DIR_CURRENT}"
 for cookie_file in "${APP_DIR}/cookies.txt" "${APP_DIR}/cookies_x.txt" "${APP_DIR}/cookies_youtube.txt"; do
   [ -f "${cookie_file}" ] && chmod 600 "${cookie_file}"
 done

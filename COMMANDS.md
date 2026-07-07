@@ -29,6 +29,7 @@ x logs        # 实时日志
 x local-api   # 安装/配置 Local Bot API Server
 x fix-env     # 补齐缺少的 .env 默认配置
 x cookies     # 立即同步 cookies.txt
+x download-dir # 查看或修改下载视频缓存目录
 x shortcut    # 查看 iPhone 快捷指令配置
 x env         # 修改 .env 配置
 x update      # 更新代码并重启
