@@ -29,6 +29,33 @@ step() {
   echo "==> $*"
 }
 
+retry_or_die() {
+  local label="$1"
+  shift
+  if "$@"; then
+    return 0
+  fi
+  echo "WARNING: ${label} failed. Retrying once..."
+  echo "警告: ${label} 失败，自动重试一次..."
+  sleep 2
+  if "$@"; then
+    return 0
+  fi
+  echo
+  echo "ERROR: ${label} failed twice."
+  echo "错误: ${label} 连续失败两次。"
+  echo "This installer already uses low-memory mode: BUILD_JOBS=${BUILD_JOBS}."
+  echo "这个安装器已经使用低内存模式: BUILD_JOBS=${BUILD_JOBS}。"
+  echo
+  echo "Try again / 重新安装:"
+  echo "  x local-api-install"
+  echo
+  echo "Or build in background / 或后台编译:"
+  echo "  BUILD_JOBS=1 x local-api-install-bg"
+  echo "  x local-api-install-log"
+  exit 1
+}
+
 env_value() {
   key="$1"
   file="${2:-${APP_DIR}/.env}"
@@ -84,8 +111,8 @@ install_packages() {
   step "Installing build packages / 安装编译依赖"
   if command -v apt >/dev/null 2>&1; then
     export DEBIAN_FRONTEND=noninteractive
-    apt update
-    apt install -y git curl ca-certificates build-essential cmake gperf zlib1g-dev libssl-dev libreadline-dev
+    retry_or_die "apt update" apt update
+    retry_or_die "apt install build packages" apt install -y git curl ca-certificates build-essential cmake gperf zlib1g-dev libssl-dev libreadline-dev
   else
     echo "This installer currently supports Debian/Ubuntu with apt."
     echo "当前脚本只支持 Debian/Ubuntu apt 系统。"
@@ -124,19 +151,19 @@ ensure_swap() {
 build_local_api() {
   step "Downloading Telegram Local Bot API Server / 下载 Telegram 本地 Bot API 服务"
   if [ -d "${LOCAL_API_SRC}/.git" ]; then
-    git -C "${LOCAL_API_SRC}" fetch origin
-    git -C "${LOCAL_API_SRC}" pull --ff-only
-    git -C "${LOCAL_API_SRC}" submodule update --init --recursive
+    retry_or_die "git fetch telegram-bot-api" git -C "${LOCAL_API_SRC}" fetch origin
+    retry_or_die "git pull telegram-bot-api" git -C "${LOCAL_API_SRC}" pull --ff-only
+    retry_or_die "git submodule update telegram-bot-api" git -C "${LOCAL_API_SRC}" submodule update --init --recursive
   else
     mkdir -p "$(dirname "${LOCAL_API_SRC}")"
-    git clone --recursive "${LOCAL_API_REPO}" "${LOCAL_API_SRC}"
+    retry_or_die "git clone telegram-bot-api" git clone --recursive "${LOCAL_API_REPO}" "${LOCAL_API_SRC}"
   fi
 
   step "Building telegram-bot-api / 编译 telegram-bot-api"
   echo "Build jobs / 编译线程: ${BUILD_JOBS}"
   mkdir -p "${LOCAL_API_BUILD}"
-  cmake -S "${LOCAL_API_SRC}" -B "${LOCAL_API_BUILD}" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local
-  cmake --build "${LOCAL_API_BUILD}" --target install -j"${BUILD_JOBS}"
+  retry_or_die "cmake configure telegram-bot-api" cmake -S "${LOCAL_API_SRC}" -B "${LOCAL_API_BUILD}" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local
+  retry_or_die "cmake build telegram-bot-api" cmake --build "${LOCAL_API_BUILD}" --target install -j"${BUILD_JOBS}"
 }
 
 write_service() {

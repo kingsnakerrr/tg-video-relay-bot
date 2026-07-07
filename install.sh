@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v44"
+APP_VERSION="v46"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -10,8 +10,46 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-06.4"
+INSTALLER_VERSION="2026-07-07.1"
 DENO_INSTALL_STATUS="skipped"
+
+retry_or_die() {
+  local label="$1"
+  shift
+  if "$@"; then
+    return 0
+  fi
+  echo "WARNING: ${label} failed. Retrying once..."
+  echo "警告: ${label} 失败，自动重试一次..."
+  sleep 2
+  if "$@"; then
+    return 0
+  fi
+  echo
+  echo "ERROR: ${label} failed twice."
+  echo "错误: ${label} 连续失败两次。"
+  echo "After fixing the VPS/network issue, reinstall with / 修好 VPS 或网络后重新执行:"
+  echo "  bash <(curl -fsSL https://raw.githubusercontent.com/kingsnakerrr/tg-video-relay-bot/main/install.sh)"
+  exit 1
+}
+
+retry_optional() {
+  local label="$1"
+  shift
+  if "$@"; then
+    return 0
+  fi
+  echo "WARNING: ${label} failed. Retrying once..."
+  echo "警告: ${label} 失败，自动重试一次..."
+  sleep 2
+  "$@"
+}
+
+install_deno_once() {
+  curl -fsSL "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip" -o "${DENO_TMP_DIR}/deno.zip" \
+    && unzip -o "${DENO_TMP_DIR}/deno.zip" -d "${DENO_TMP_DIR}" \
+    && install -m 755 "${DENO_TMP_DIR}/deno" /usr/local/bin/deno
+}
 
 die() {
   echo "ERROR: $*" >&2
@@ -89,8 +127,8 @@ esac
 step "Installing system packages / 安装系统依赖"
 if command -v apt >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
-  apt update
-  apt install -y git curl ca-certificates python3 python3-venv python3-pip ffmpeg unzip
+  retry_or_die "apt update" apt update
+  retry_or_die "apt install packages" apt install -y git curl ca-certificates python3 python3-venv python3-pip ffmpeg unzip
 else
   die "This installer currently supports Debian/Ubuntu with apt. / 当前脚本只支持 Debian/Ubuntu apt 系统。"
 fi
@@ -117,9 +155,9 @@ if [ -n "${SCRIPT_DIR}" ] && has_project_files "${SCRIPT_DIR}"; then
   fi
 elif [ -d "${APP_DIR}/.git" ]; then
   step "Updating existing GitHub checkout / 更新现有 GitHub 项目"
-  git -C "${APP_DIR}" fetch origin "${BRANCH}"
-  git -C "${APP_DIR}" checkout "${BRANCH}"
-  git -C "${APP_DIR}" pull --ff-only origin "${BRANCH}"
+  retry_or_die "git fetch project" git -C "${APP_DIR}" fetch origin "${BRANCH}"
+  retry_or_die "git checkout project branch" git -C "${APP_DIR}" checkout "${BRANCH}"
+  retry_or_die "git pull project" git -C "${APP_DIR}" pull --ff-only origin "${BRANCH}"
 elif dir_is_not_empty "${APP_DIR}"; then
   if has_project_files "${APP_DIR}"; then
     step "Using existing project files / 使用现有项目文件"
@@ -128,31 +166,29 @@ elif dir_is_not_empty "${APP_DIR}"; then
     step "${APP_DIR} exists but is not a valid install. Moving it to ${BACKUP_DIR} / ${APP_DIR} 已存在但不是有效安装，移动到 ${BACKUP_DIR}"
     mv "${APP_DIR}" "${BACKUP_DIR}"
     step "Cloning project from GitHub / 从 GitHub 克隆项目"
-    git clone --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}"
+    retry_or_die "git clone project" git clone --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}"
   fi
 else
   step "Cloning project from GitHub / 从 GitHub 克隆项目"
-  git clone --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}"
+  retry_or_die "git clone project" git clone --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}"
 fi
 
 cd "${APP_DIR}"
 has_project_files "${APP_DIR}" || die "Project files were not found in ${APP_DIR}. / ${APP_DIR} 中没有找到项目文件。"
 
 step "Creating Python virtual environment / 创建 Python 虚拟环境"
-"${PYTHON_BIN}" -m venv .venv
+retry_or_die "create Python venv" "${PYTHON_BIN}" -m venv .venv
 . .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install --upgrade -r requirements.txt
-python -m pip install --upgrade yt-dlp
+retry_or_die "upgrade pip" python -m pip install --upgrade pip
+retry_or_die "install Python requirements" python -m pip install --upgrade -r requirements.txt
+retry_or_die "install yt-dlp" python -m pip install --upgrade yt-dlp
 
 if command -v deno >/dev/null 2>&1; then
   DENO_INSTALL_STATUS="already installed"
 else
   step "Installing yt-dlp JavaScript runtime / 安装 yt-dlp JavaScript 运行时"
   DENO_TMP_DIR="$(mktemp -d)"
-  if curl -fsSL "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip" -o "${DENO_TMP_DIR}/deno.zip" \
-    && unzip -o "${DENO_TMP_DIR}/deno.zip" -d "${DENO_TMP_DIR}" \
-    && install -m 755 "${DENO_TMP_DIR}/deno" /usr/local/bin/deno; then
+  if retry_optional "install Deno runtime" install_deno_once; then
     deno --version || true
     DENO_INSTALL_STATUS="installed"
   else
@@ -326,28 +362,18 @@ echo "Remove / 卸载:      x uninstall"
 echo "Update / 更新:      bash <(curl -fsSL https://raw.githubusercontent.com/kingsnakerrr/tg-video-relay-bot/main/install.sh)"
 echo
 echo "yt-dlp JS runtime / yt-dlp JS 运行时: ${DENO_INSTALL_STATUS}"
-echo "Deno is a prebuilt binary and usually does not need large memory."
-echo "Deno 是预编译文件，一般不需要大内存。"
 if [ "${DENO_INSTALL_STATUS}" = "failed" ]; then
   echo
   echo "Manual Deno install / Deno 手动安装:"
   echo "  x js-runtime-install"
 fi
 echo
-echo "Low-memory VPS tips / 低内存 VPS 建议:"
-echo "  Local Bot API compilation may need swap. Deno does not compile."
-echo "  Local Bot API 编译可能需要 swap 虚拟内存，Deno 不用编译。"
+echo "Local Bot API low-memory install / Local Bot API 低内存安装:"
+echo "  The Local Bot API installer uses BUILD_JOBS=1 by default and prepares swap automatically."
+echo "  Local Bot API 安装默认用 BUILD_JOBS=1 单线程编译，并会自动准备 swap。"
 echo
-echo "Create 4G swap if compiling fails / 编译失败时先开 4G swap:"
-echo "  fallocate -l 4G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=4096"
-echo "  chmod 600 /swapfile"
-echo "  mkswap /swapfile"
-echo "  swapon /swapfile"
-echo "  grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab"
-echo "  free -h"
-echo
-echo "Low-memory Local Bot API install / 低内存模式安装 Local Bot API:"
-echo "  BUILD_JOBS=1 x local-api-install"
-echo "Or background build / 或后台编译:"
+echo "If Local Bot API install fails, rerun / 如果 Local Bot API 安装失败，重新执行:"
+echo "  x local-api-install"
+echo "Or use background build / 或后台编译:"
 echo "  BUILD_JOBS=1 x local-api-install-bg"
 echo "  x local-api-install-log"

@@ -22,6 +22,8 @@
 - v42：新增 Telegram 机器人内管理员按钮菜单和斜杠菜单，可在 TG 里执行状态、日志、更新、重启、停止、同步 cookies 等操作
 - v43：精简 VPS `x` 主菜单，合并 cookies 状态/直链设置/同步入口，安装时自动安装 yt-dlp JS runtime
 - v44：安装时自动尝试安装 Deno/yt-dlp JS runtime，失败也继续安装；安装结束显示手动安装、swap 虚拟内存和低内存 Local Bot API 编译命令
+- v45：安装步骤失败会自动重试一次；Local Bot API 默认按低内存方式安装，`BUILD_JOBS=1` 并自动准备 swap，失败后提示重新安装命令
+- v46：修复 Debian trixie/Python 3.13 删除 `cgi` 标准库导致 HTTP submit API 启动失败的问题
 - `/id` 查看当前用户和聊天 ID
 - `/targets` 查看当前转发目标数量
 - `/status` 查看队列状态
@@ -63,32 +65,27 @@ x
 x logs
 ```
 
-### 低内存 VPS 和 JS runtime
+### 安装失败重试和低内存 Local Bot API
 
-安装脚本会自动尝试安装 Deno，给 `yt-dlp` 解析 YouTube 使用。Deno 是预编译文件，一般不需要大内存；如果自动安装失败，整体安装会继续，后面可以手动执行：
+安装脚本里安装程序、Python 依赖、yt-dlp、Deno 等步骤如果失败，会自动重试一次。第二次还失败，脚本会停下来并提示重新执行一键安装：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/kingsnakerrr/tg-video-relay-bot/main/install.sh)
+```
+
+`Install yt-dlp JS runtime` 只是给 YouTube 解析用的 Deno，不是之前爆内存的东西；如果它失败，后面可以手动执行：
 
 ```bash
 x js-runtime-install
 ```
 
-真正容易爆内存的是 Local Bot API 的 `telegram-bot-api` 源码编译。低内存 VPS 建议先开 4G swap：
+真正容易爆内存的是 Local Bot API 的 `telegram-bot-api` 源码编译。现在 `x local-api-install` 默认就是低内存安装，会用 `BUILD_JOBS=1` 单线程编译，并自动准备 swap：
 
 ```bash
-fallocate -l 4G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=4096
-chmod 600 /swapfile
-mkswap /swapfile
-swapon /swapfile
-grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
-free -h
+x local-api-install
 ```
 
-然后用低内存模式编译 Local Bot API：
-
-```bash
-BUILD_JOBS=1 x local-api-install
-```
-
-也可以后台编译并查看日志：
+如果 Local Bot API 安装失败，直接重新执行上面的命令；也可以后台编译并查看日志：
 
 ```bash
 BUILD_JOBS=1 x local-api-install-bg

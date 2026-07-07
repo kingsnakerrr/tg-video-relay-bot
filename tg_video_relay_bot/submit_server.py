@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import cgi
-import io
+from email import policy
+from email.parser import BytesParser
 import json
 import logging
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -50,25 +50,25 @@ def _normalize_values(values: dict[str, list[str]]) -> dict[str, list[str]]:
 
 
 def _parse_multipart(handler: BaseHTTPRequestHandler, raw_body: bytes, content_type: str, length: int) -> dict[str, list[str]]:
-    environ = {
-        "REQUEST_METHOD": "POST",
-        "CONTENT_TYPE": content_type,
-        "CONTENT_LENGTH": str(length),
-    }
-    form = cgi.FieldStorage(
-        fp=io.BytesIO(raw_body),
-        headers=handler.headers,
-        environ=environ,
-        keep_blank_values=True,
-    )
+    header = (
+        f"Content-Type: {content_type}\r\n"
+        f"Content-Length: {length}\r\n"
+        "MIME-Version: 1.0\r\n\r\n"
+    ).encode("utf-8")
+    message = BytesParser(policy=policy.default).parsebytes(header + raw_body)
+    if not message.is_multipart():
+        raise SubmitServerError("Invalid multipart/form-data body.")
+
     values: dict[str, list[str]] = {}
-    for key in form.keys():
-        field = form[key]
-        fields = field if isinstance(field, list) else [field]
-        for item in fields:
-            if item.filename:
-                continue
-            values.setdefault(key, []).append(str(item.value))
+    for part in message.iter_parts():
+        name = part.get_param("name", header="content-disposition")
+        filename = part.get_filename()
+        if not name or filename:
+            continue
+        payload = part.get_content()
+        if isinstance(payload, bytes):
+            payload = payload.decode(part.get_content_charset() or "utf-8", errors="replace")
+        values.setdefault(name, []).append(str(payload))
     return values
 
 

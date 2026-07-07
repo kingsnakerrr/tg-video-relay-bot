@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v44"
+APP_VERSION="v46"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -464,26 +464,19 @@ low_memory_help() {
   cat <<'EOF'
 Low-memory VPS help / 低内存 VPS 帮助
 
-Deno / yt-dlp JavaScript runtime:
-  Deno is a prebuilt binary and usually does not need large memory.
-  Deno 是预编译文件，一般不需要大内存。
-
 Manual Deno install / 手动安装 Deno:
   x js-runtime-install
 
 Local Bot API:
   telegram-bot-api is compiled from source and can use a lot of RAM.
   telegram-bot-api 需要源码编译，低内存 VPS 容易爆内存。
+  The installer already uses low-memory mode by default: BUILD_JOBS=1.
+  安装器默认已经使用低内存模式: BUILD_JOBS=1。
 
-Create 4G swap / 创建 4G 虚拟内存:
-  fallocate -l 4G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=4096
-  chmod 600 /swapfile
-  mkswap /swapfile
-  swapon /swapfile
-  grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
-  free -h
+Normal install / 正常安装:
+  x local-api-install
 
-Low-memory Local Bot API install / 低内存模式安装 Local Bot API:
+Retry low-memory install / 重新低内存安装:
   BUILD_JOBS=1 x local-api-install
 
 Background build / 后台编译:
