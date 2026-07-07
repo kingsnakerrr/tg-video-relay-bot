@@ -20,6 +20,8 @@
 - v40：新增 X/YouTube 独立 cookies 同步链接配置，支持 Google Drive 分享链接自动转直链，菜单可手动配置和同步
 - v41：Telegram 上传遇到连接中断、RemoteDisconnected 或 5xx 时自动重试，默认 `UPLOAD_RETRIES=3`
 - v42：新增 Telegram 机器人内管理员按钮菜单和斜杠菜单，可在 TG 里执行状态、日志、更新、重启、停止、同步 cookies 等操作
+- v43：精简 VPS `x` 主菜单，合并 cookies 状态/直链设置/同步入口，安装时自动安装 yt-dlp JS runtime
+- v44：安装时自动尝试安装 Deno/yt-dlp JS runtime，失败也继续安装；安装结束显示手动安装、swap 虚拟内存和低内存 Local Bot API 编译命令
 - `/id` 查看当前用户和聊天 ID
 - `/targets` 查看当前转发目标数量
 - `/status` 查看队列状态
@@ -59,6 +61,38 @@ x
 
 ```bash
 x logs
+```
+
+### 低内存 VPS 和 JS runtime
+
+安装脚本会自动尝试安装 Deno，给 `yt-dlp` 解析 YouTube 使用。Deno 是预编译文件，一般不需要大内存；如果自动安装失败，整体安装会继续，后面可以手动执行：
+
+```bash
+x js-runtime-install
+```
+
+真正容易爆内存的是 Local Bot API 的 `telegram-bot-api` 源码编译。低内存 VPS 建议先开 4G swap：
+
+```bash
+fallocate -l 4G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=4096
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+free -h
+```
+
+然后用低内存模式编译 Local Bot API：
+
+```bash
+BUILD_JOBS=1 x local-api-install
+```
+
+也可以后台编译并查看日志：
+
+```bash
+BUILD_JOBS=1 x local-api-install-bg
+x local-api-install-log
 ```
 
 ### 手动安装

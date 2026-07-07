@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v42"
+APP_VERSION="v44"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -37,21 +37,12 @@ Usage / 用法:
   x doctor             Diagnose service and submit API / 诊断服务和提交接口
   x ytdlp-update       Update yt-dlp downloader / 更新 yt-dlp 下载器
   x ytdlp-version      Show yt-dlp version / 查看 yt-dlp 版本
-  x js-runtime-install Install Deno for yt-dlp YouTube extraction / 安装 yt-dlp YouTube JS 运行时
-  x youtube-cookies-test URL
-                       Test YouTube cookies with yt-dlp / 用 yt-dlp 检测 YouTube cookies
-  x mode               Show upload mode status / 查看上传模式状态
-  x 1080p              Set 1080p no-compress defaults / 设置 1080p 不压缩
-  x original           Switch to original-quality upload / 切到原画质不压缩上传
-  x local              Switch to Local Bot API mode / 切换到本地原画质模式
-  x public             Switch to public Bot API mode / 切回公网兼容模式
-  x quality            Show original-quality upload settings / 查看原画质上传配置
-  x local-api          Install/configure local Bot API server / 安装或配置本地 Bot API
-  x local-api-install-bg Continue low-memory background install / 低内存后台继续安装本地 Bot API
-  x fix-env            Add missing default .env keys / 补齐缺少的 .env 默认配置
+  x switch-mode        Switch upload mode / 切换上传模式
+  x cookies-test       Test X and YouTube cookies / 检测 X 和 YouTube cookies
   x test-submit URL    Submit one URL from the VPS itself / 在 VPS 本机测试提交链接
-  x cookies            Sync cookies.txt now / 立即同步 cookies.txt
-  x cookies-config     Edit X/YouTube cookie sync links / 配置 X/YouTube cookies 同步链接
+  x cookies            Sync cookies now / 立即同步 cookies
+  x cookies-menu       Show/change/sync cookie links / 查看、修改、同步 cookies
+  x low-memory-help    Show swap and low-memory build commands / 显示 swap 和低内存编译命令
   x shortcut           Show iPhone Shortcut submit settings / 查看 iPhone 快捷指令配置
   x env                Edit .env config / 编辑 .env 配置
   x update             Pull latest code and restart / 更新代码并重启
@@ -97,23 +88,18 @@ Actions / 操作菜单
 4) Status / 状态
 5) Doctor / 诊断
 6) Logs / 日志
-7) Upload mode status / 上传模式状态
-8) YouTube 1080p no-compress / YouTube 1080p 不压缩
-9) Original-quality upload settings / 原画质上传配置
-10) Update yt-dlp downloader / 更新 yt-dlp 下载器
-11) Install yt-dlp JS runtime / 安装 yt-dlp JS 运行时
-12) Test YouTube cookies / 检测 YouTube cookies
-13) Local Bot API server / 本地 Bot API 服务
-14) Fix missing .env defaults / 补齐缺少的 .env 默认配置
-15) Test submit URL / 测试提交链接
-16) Sync cookies now / 立即同步 cookies
-17) Cookie sync settings / Cookies 同步设置
-18) iPhone Shortcut settings / iPhone 快捷指令配置
-19) Edit config / 编辑配置
-20) Update / 更新
-21) Reinstall / 重装
-22) Uninstall service, keep files / 卸载服务但保留文件
-23) Purge everything / 彻底删除
+7) Switch upload mode / 切换上传模式
+8) Update yt-dlp downloader / 更新 yt-dlp 下载器
+9) Test cookies / 检测 X 和 YouTube cookies
+10) Cookies sync / Cookies 同步和直链设置
+11) Test submit X URL / 测试提交 X 链接
+12) Test submit YouTube URL / 测试提交 YouTube 链接
+13) iPhone Shortcut settings / iPhone 快捷指令配置
+14) Edit config / 编辑配置
+15) Update / 更新
+16) Reinstall / 重装
+17) Uninstall service, keep files / 卸载服务但保留文件
+18) Purge everything / 彻底删除
 0) Exit / 退出
 EOF
   echo
@@ -125,23 +111,18 @@ EOF
     4) run status ;;
     5) run doctor ;;
     6) run logs ;;
-    7) run mode ;;
-    8) run 1080p ;;
-    9) run quality ;;
-    10) run ytdlp-update ;;
-    11) run js-runtime-install ;;
-    12) read -r -p "YouTube URL: " test_url; run youtube-cookies-test "${test_url}" ;;
-    13) run local-api ;;
-    14) run fix-env ;;
-    15) read -r -p "URL: " test_url; run test-submit "${test_url}" ;;
-    16) run cookies ;;
-    17) run cookies-config ;;
-    18) run shortcut ;;
-    19) run env ;;
-    20) run update ;;
-    21) run reinstall ;;
-    22) run uninstall ;;
-    23) run purge ;;
+    7) run switch-mode ;;
+    8) run ytdlp-update ;;
+    9) run cookies-test ;;
+    10) run cookies-menu ;;
+    11) read -r -p "X URL: " test_url; run test-submit "${test_url}" ;;
+    12) read -r -p "YouTube URL: " test_url; run test-submit "${test_url}" ;;
+    13) run shortcut ;;
+    14) run env ;;
+    15) run update ;;
+    16) run reinstall ;;
+    17) run uninstall ;;
+    18) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice. / 选择无效。"; exit 1 ;;
   esac
@@ -325,39 +306,129 @@ youtube_cookies_test() {
     -F "${url}"
 }
 
+cookie_file_status() {
+  label="$1"
+  path="$2"
+  domain_pattern="$3"
+
+  echo "== ${label} cookies =="
+  echo "File / 文件: ${path:-missing / 未设置}"
+  if [ -z "${path}" ]; then
+    echo "Status / 状态: path missing / 路径未设置"
+    echo
+    return
+  fi
+  if [ ! -f "${path}" ]; then
+    echo "Status / 状态: file missing / 文件不存在"
+    echo
+    return
+  fi
+  ls -lh "${path}"
+  perms="$(stat -c '%a' "${path}" 2>/dev/null || true)"
+  echo "Permission / 权限: ${perms:-unknown}"
+  if grep -qi 'Netscape HTTP Cookie File' "${path}"; then
+    echo "Format / 格式: Netscape OK / 正确"
+  else
+    echo "Format / 格式: maybe invalid / 可能不是 Netscape cookies.txt"
+  fi
+  rows="$(grep -Ei "${domain_pattern}" "${path}" | wc -l | tr -d ' ')"
+  echo "Matched rows / 匹配行数: ${rows}"
+  echo
+}
+
+test_all_cookies() {
+  need_root
+  ensure_env_defaults
+  cookie_file_status "X" "$(env_value COOKIES_FILE_X)" '(^|[[:space:]])\.?(x|twitter)\.com[[:space:]]'
+  cookie_file_status "YouTube" "$(env_value COOKIES_FILE_YOUTUBE)" '(^|[[:space:]])\.?(youtube|google)\.com[[:space:]]'
+}
+
 cookie_sync_config() {
   need_root
   ensure_env_defaults
   env_file="${APP_DIR}/.env"
   [ -f "${env_file}" ] || { echo "${env_file} not found."; exit 1; }
 
-  echo "Current cookie sync settings / 当前 cookies 同步设置:"
+  echo "Current cookie status / 当前 cookies 状态:"
+  echo
+  test_all_cookies
+  echo "Current cookie sync links / 当前 cookies 同步直链:"
   echo "  COOKIES_FILE_X=$(env_value COOKIES_FILE_X)"
   echo "  COOKIE_SYNC_URL_X=$(env_value COOKIE_SYNC_URL_X)"
   echo "  COOKIES_FILE_YOUTUBE=$(env_value COOKIES_FILE_YOUTUBE)"
   echo "  COOKIE_SYNC_URL_YOUTUBE=$(env_value COOKIE_SYNC_URL_YOUTUBE)"
   echo "  COOKIE_SYNC_INTERVAL_MINUTES=$(env_value COOKIE_SYNC_INTERVAL_MINUTES)"
   echo
-  echo "Paste Google Drive share links or direct file links. Press Enter to keep current."
-  echo "可粘贴 Google Drive 分享链接或文件直链；直接回车保留当前值。"
+  echo "Google Drive share links like /file/d/.../view are OK; the program converts them automatically."
+  echo "Google Drive 分享页链接可以直接填，程序会自动转成下载链接。"
   echo
 
-  current_x="$(env_value COOKIE_SYNC_URL_X)"
-  current_youtube="$(env_value COOKIE_SYNC_URL_YOUTUBE)"
-  current_interval="$(env_value COOKIE_SYNC_INTERVAL_MINUTES)"
-  read -r -p "X cookies sync link / X cookies 同步链接 [keep / 保留]: " new_x
-  read -r -p "YouTube cookies sync link / YouTube cookies 同步链接 [keep / 保留]: " new_youtube
-  read -r -p "Sync interval minutes / 同步间隔分钟 [${current_interval:-360}]: " new_interval
+  read -r -p "Change X cookies sync link? [y/N] / 是否修改 X cookies 直链？[y/N]: " change_x
+  if [[ "${change_x}" =~ ^[Yy]$ ]]; then
+    read -r -p "New X cookies sync link, empty to clear / 新 X cookies 直链，留空为删除: " new_x
+    set_env_value "${env_file}" COOKIE_SYNC_URL_X "${new_x}"
+  fi
 
-  [ -n "${new_x}" ] && set_env_value "${env_file}" COOKIE_SYNC_URL_X "${new_x}"
-  [ -n "${new_youtube}" ] && set_env_value "${env_file}" COOKIE_SYNC_URL_YOUTUBE "${new_youtube}"
+  read -r -p "Change YouTube cookies sync link? [y/N] / 是否修改 YouTube cookies 直链？[y/N]: " change_youtube
+  if [[ "${change_youtube}" =~ ^[Yy]$ ]]; then
+    read -r -p "New YouTube cookies sync link, empty to clear / 新 YouTube cookies 直链，留空为删除: " new_youtube
+    set_env_value "${env_file}" COOKIE_SYNC_URL_YOUTUBE "${new_youtube}"
+  fi
+
+  current_interval="$(env_value COOKIE_SYNC_INTERVAL_MINUTES)"
+  read -r -p "Change sync interval minutes? [${current_interval:-360}, Enter keep] / 修改同步间隔分钟？[回车保留]: " new_interval
   [ -n "${new_interval}" ] && set_env_value "${env_file}" COOKIE_SYNC_INTERVAL_MINUTES "${new_interval}"
 
   echo
-  echo "Saved. Run manual sync now with / 已保存。现在可手动同步："
-  echo "  x cookies"
-  echo "Then restart bot with / 然后重启机器人："
-  echo "  x restart"
+  read -r -p "Sync cookies now? [Y/n] / 现在同步 cookies？[Y/n]: " sync_now
+  if [[ ! "${sync_now}" =~ ^[Nn]$ ]]; then
+    cd "${APP_DIR}"
+    "${APP_DIR}/.venv/bin/python" -m tg_video_relay_bot.cookie_sync || true
+  fi
+
+  echo
+  echo "Updated status / 更新后状态:"
+  echo
+  test_all_cookies
+  read -r -p "Press Enter to return menu / 按回车返回菜单: " _
+  menu
+}
+
+switch_upload_mode() {
+  need_root
+  ensure_env_defaults
+  echo "Current mode / 当前模式: $(current_upload_mode_label)"
+  echo
+  echo "1) Public Bot API compatibility / 公网 Bot API 兼容模式，约 50MB，大文件会压缩"
+  echo "2) Local Bot API original quality / 本地 Bot API 原画质模式，约 2000MB，不压缩"
+  echo "0) Back / 返回"
+  echo
+  read -r -p "Choose mode / 选择模式: " mode_choice
+  case "${mode_choice}" in
+    1)
+      bash "${APP_DIR}/install_local_bot_api.sh" public
+      ;;
+    2)
+      if ! systemctl is-active --quiet "${LOCAL_API_NAME}" 2>/dev/null; then
+        echo "Local Bot API is not running. / 本地 Bot API 没有运行。"
+        read -r -p "Install/configure it now? [y/N] / 现在安装或配置？[y/N]: " install_local
+        [[ "${install_local}" =~ ^[Yy]$ ]] || { echo "Cancelled. / 已取消。"; return; }
+        bash "${APP_DIR}/install_local_bot_api.sh" install
+      fi
+      bash "${APP_DIR}/install_local_bot_api.sh" switch
+      set_env_value "${APP_DIR}/.env" MAX_UPLOAD_MB "1900"
+      set_env_value "${APP_DIR}/.env" AUTO_COMPRESS "false"
+      ;;
+    0|"")
+      return
+      ;;
+    *)
+      echo "Invalid choice. / 选择无效。"
+      return 1
+      ;;
+  esac
+  systemctl restart "${APP_NAME}" 2>/dev/null || true
+  echo "Done. / 完成。"
 }
 
 install_js_runtime() {
@@ -373,14 +444,52 @@ install_js_runtime() {
   apt-get update
   apt-get install -y unzip curl ca-certificates
   tmp_dir="$(mktemp -d)"
-  curl -fsSL "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip" -o "${tmp_dir}/deno.zip"
-  unzip -o "${tmp_dir}/deno.zip" -d "${tmp_dir}"
-  install -m 755 "${tmp_dir}/deno" /usr/local/bin/deno
+  if ! curl -fsSL "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip" -o "${tmp_dir}/deno.zip" \
+    || ! unzip -o "${tmp_dir}/deno.zip" -d "${tmp_dir}" \
+    || ! install -m 755 "${tmp_dir}/deno" /usr/local/bin/deno; then
+    rm -rf "${tmp_dir}"
+    echo "Deno install failed. / Deno 安装失败。"
+    echo "You can try again later / 可以稍后重试:"
+    echo "  x js-runtime-install"
+    exit 1
+  fi
   rm -rf "${tmp_dir}"
   deno --version
   echo
   echo "Done. Run YouTube test again / 完成，请重新测试："
   echo "  x youtube-cookies-test 'https://www.youtube.com/watch?v=y3UWClkcvTA'"
+}
+
+low_memory_help() {
+  cat <<'EOF'
+Low-memory VPS help / 低内存 VPS 帮助
+
+Deno / yt-dlp JavaScript runtime:
+  Deno is a prebuilt binary and usually does not need large memory.
+  Deno 是预编译文件，一般不需要大内存。
+
+Manual Deno install / 手动安装 Deno:
+  x js-runtime-install
+
+Local Bot API:
+  telegram-bot-api is compiled from source and can use a lot of RAM.
+  telegram-bot-api 需要源码编译，低内存 VPS 容易爆内存。
+
+Create 4G swap / 创建 4G 虚拟内存:
+  fallocate -l 4G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=4096
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  free -h
+
+Low-memory Local Bot API install / 低内存模式安装 Local Bot API:
+  BUILD_JOBS=1 x local-api-install
+
+Background build / 后台编译:
+  BUILD_JOBS=1 x local-api-install-bg
+  x local-api-install-log
+EOF
 }
 
 set_1080p_original_defaults() {
@@ -515,6 +624,9 @@ run() {
       need_root
       mode_status
       ;;
+    switch-mode|upload-mode|mode-switch)
+      switch_upload_mode
+      ;;
     1080p|youtube-1080p|quality-1080p)
       set_1080p_original_defaults
       ;;
@@ -595,8 +707,14 @@ run() {
     js-runtime-install|js-install|deno-install)
       install_js_runtime
       ;;
+    low-memory-help|swap-help|memory-help)
+      low_memory_help
+      ;;
     youtube-cookies-test|youtube-cookie-test|ytcookie|yt-cookies)
       youtube_cookies_test "${2:-}"
+      ;;
+    cookies-test|cookie-test|test-cookies)
+      test_all_cookies
       ;;
     quality)
       env_file="${APP_DIR}/.env"
@@ -695,7 +813,7 @@ run() {
       cd "${APP_DIR}"
       "${APP_DIR}/.venv/bin/python" -m tg_video_relay_bot.cookie_sync
       ;;
-    cookies-config|cookie-config|sync-cookies-config)
+    cookies-menu|cookies-config|cookie-config|sync-cookies-config)
       cookie_sync_config
       ;;
     shortcut|submit)

@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v42"
+APP_VERSION="v44"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -10,7 +10,8 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-06.2"
+INSTALLER_VERSION="2026-07-06.4"
+DENO_INSTALL_STATUS="skipped"
 
 die() {
   echo "ERROR: $*" >&2
@@ -89,7 +90,7 @@ step "Installing system packages / 安装系统依赖"
 if command -v apt >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
   apt update
-  apt install -y git curl ca-certificates python3 python3-venv python3-pip ffmpeg
+  apt install -y git curl ca-certificates python3 python3-venv python3-pip ffmpeg unzip
 else
   die "This installer currently supports Debian/Ubuntu with apt. / 当前脚本只支持 Debian/Ubuntu apt 系统。"
 fi
@@ -143,6 +144,24 @@ step "Creating Python virtual environment / 创建 Python 虚拟环境"
 python -m pip install --upgrade pip
 python -m pip install --upgrade -r requirements.txt
 python -m pip install --upgrade yt-dlp
+
+if command -v deno >/dev/null 2>&1; then
+  DENO_INSTALL_STATUS="already installed"
+else
+  step "Installing yt-dlp JavaScript runtime / 安装 yt-dlp JavaScript 运行时"
+  DENO_TMP_DIR="$(mktemp -d)"
+  if curl -fsSL "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip" -o "${DENO_TMP_DIR}/deno.zip" \
+    && unzip -o "${DENO_TMP_DIR}/deno.zip" -d "${DENO_TMP_DIR}" \
+    && install -m 755 "${DENO_TMP_DIR}/deno" /usr/local/bin/deno; then
+    deno --version || true
+    DENO_INSTALL_STATUS="installed"
+  else
+    DENO_INSTALL_STATUS="failed"
+    echo "WARNING: Deno install failed. You can run x js-runtime-install later."
+    echo "警告: Deno 自动安装失败。以后可以执行 x js-runtime-install。"
+  fi
+  rm -rf "${DENO_TMP_DIR}"
+fi
 
 if [ ! -f .env ]; then
   step "Creating .env / 创建配置文件 .env"
@@ -305,3 +324,30 @@ echo "Start / 启动:       x start"
 echo "Shortcut / 快捷指令:x shortcut"
 echo "Remove / 卸载:      x uninstall"
 echo "Update / 更新:      bash <(curl -fsSL https://raw.githubusercontent.com/kingsnakerrr/tg-video-relay-bot/main/install.sh)"
+echo
+echo "yt-dlp JS runtime / yt-dlp JS 运行时: ${DENO_INSTALL_STATUS}"
+echo "Deno is a prebuilt binary and usually does not need large memory."
+echo "Deno 是预编译文件，一般不需要大内存。"
+if [ "${DENO_INSTALL_STATUS}" = "failed" ]; then
+  echo
+  echo "Manual Deno install / Deno 手动安装:"
+  echo "  x js-runtime-install"
+fi
+echo
+echo "Low-memory VPS tips / 低内存 VPS 建议:"
+echo "  Local Bot API compilation may need swap. Deno does not compile."
+echo "  Local Bot API 编译可能需要 swap 虚拟内存，Deno 不用编译。"
+echo
+echo "Create 4G swap if compiling fails / 编译失败时先开 4G swap:"
+echo "  fallocate -l 4G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=4096"
+echo "  chmod 600 /swapfile"
+echo "  mkswap /swapfile"
+echo "  swapon /swapfile"
+echo "  grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab"
+echo "  free -h"
+echo
+echo "Low-memory Local Bot API install / 低内存模式安装 Local Bot API:"
+echo "  BUILD_JOBS=1 x local-api-install"
+echo "Or background build / 或后台编译:"
+echo "  BUILD_JOBS=1 x local-api-install-bg"
+echo "  x local-api-install-log"
