@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v59"
+APP_VERSION="v60"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -986,9 +986,9 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.0.9",
+    "version": "1.1.0",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
-    "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead"],
+    "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
     "background": {"service_worker": "background.js"},
     "action": {"default_title": "Send current page to TG Relay"},
@@ -1043,6 +1043,16 @@ function cleanUrl(url) {{
   }}
 }}
 
+function isBadFallbackUrl(url) {{
+  try {{
+    const parsed = new URL(url);
+    return (parsed.hostname === "x.com" || parsed.hostname === "twitter.com") &&
+      (parsed.pathname === "/" || parsed.pathname === "/home");
+  }} catch {{
+    return false;
+  }}
+}}
+
 async function getContentScriptUrl(tab) {{
   let messageUrl = "";
   try {{
@@ -1053,20 +1063,62 @@ async function getContentScriptUrl(tab) {{
   }} catch (error) {{
     messageUrl = "";
   }}
-  if (messageUrl) return messageUrl;
+  if (messageUrl && !isBadFallbackUrl(messageUrl)) return messageUrl;
   try {{
     const stored = await chrome.storage.session.get(["tgRelayLastRightClickUrl", "tgRelayLastRightClickAt"]);
     const ageMs = Date.now() - Number(stored.tgRelayLastRightClickAt || 0);
-    if (stored.tgRelayLastRightClickUrl && ageMs < 30000) {{
+    if (stored.tgRelayLastRightClickUrl && ageMs < 30000 && !isBadFallbackUrl(stored.tgRelayLastRightClickUrl)) {{
       return stored.tgRelayLastRightClickUrl;
     }}
   }} catch (error) {{}}
   return "";
 }}
 
+async function getClipboardOrPromptUrl(tab) {{
+  if (!tab || !tab.id) return "";
+  try {{
+    const results = await chrome.scripting.executeScript({{
+      target: {{ tabId: tab.id }},
+      func: async () => {{
+        function normalize(raw) {{
+          if (!raw) return "";
+          try {{
+            const parsed = new URL(raw, location.href);
+            const statusMatch = parsed.pathname.match(/^\\/([^/]+)\\/status\\/(\\d+)/);
+            if ((parsed.hostname === "x.com" || parsed.hostname === "twitter.com") && statusMatch) {{
+              return parsed.origin + "/" + statusMatch[1] + "/status/" + statusMatch[2];
+            }}
+            return parsed.href;
+          }} catch {{
+            return String(raw || "");
+          }}
+        }}
+        function supported(url) {{
+          return /^https?:\\/\\/(x\\.com|twitter\\.com)\\/[^/]+\\/status\\/\\d+/.test(url)
+            || /^https?:\\/\\/www\\.youtube\\.com\\/watch\\?/.test(url)
+            || /^https?:\\/\\/youtu\\.be\\//.test(url)
+            || /^https?:\\/\\/(www\\.)?tiktok\\.com\\//.test(url)
+            || /^https?:\\/\\/v\\.douyin\\.com\\//.test(url);
+        }}
+        try {{
+          const text = (await navigator.clipboard.readText()).trim();
+          const url = normalize(text);
+          if (supported(url)) return url;
+        }} catch (error) {{}}
+        const pasted = window.prompt("没有读到剪贴板里的真实链接，请粘贴 X/YouTube/TikTok/Douyin 链接：", "");
+        const url = normalize(pasted || "");
+        return supported(url) ? url : "";
+      }}
+    }});
+    return results && results[0] && results[0].result ? results[0].result : "";
+  }} catch (error) {{
+    return "";
+  }}
+}}
+
 async function submitUrl(rawUrl) {{
   const targetUrl = cleanUrl(rawUrl);
-  if (!targetUrl || targetUrl.startsWith("chrome://") || targetUrl.startsWith("edge://")) {{
+  if (!targetUrl || targetUrl.startsWith("chrome://") || targetUrl.startsWith("edge://") || isBadFallbackUrl(targetUrl)) {{
     mark("ERR");
     console.warn("TG Relay: no valid page/link URL found");
     return;
@@ -1108,7 +1160,8 @@ chrome.runtime.onInstalled.addListener(() => {{
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {{
   const pageCardUrl = await getContentScriptUrl(tab);
-  const targetUrl = info.linkUrl || pageCardUrl || info.srcUrl || info.pageUrl || (tab && tab.url);
+  const clipboardOrPromptUrl = info.linkUrl ? "" : await getClipboardOrPromptUrl(tab);
+  const targetUrl = info.linkUrl || clipboardOrPromptUrl || pageCardUrl || info.srcUrl || "";
   submitUrl(targetUrl);
 }});
 
@@ -1186,7 +1239,7 @@ function findUrlFromTarget(target) {
 function rememberEvent(event) {
   window.tgRelayLastClientX = event.clientX;
   window.tgRelayLastClientY = event.clientY;
-  lastRightClickUrl = findUrlFromTarget(event.target) || location.href;
+  lastRightClickUrl = findUrlFromTarget(event.target) || "";
   try {
     chrome.storage.session.set({
       tgRelayLastRightClickUrl: lastRightClickUrl,
@@ -1243,7 +1296,7 @@ async function getClipboardShareUrl() {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && message.type === "get-submit-url") {
     getClipboardShareUrl().then((clipboardUrl) => {
-      sendResponse({ url: clipboardUrl || lastRightClickUrl || location.href });
+      sendResponse({ url: clipboardUrl || lastRightClickUrl || "" });
     });
     return true;
   }
