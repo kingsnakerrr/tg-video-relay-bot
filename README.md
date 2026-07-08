@@ -32,6 +32,7 @@
 - v52：修复 Chrome 扩展 Service Worker 无效的问题，提交地址和密钥改用 JSON 安全转义写入后台脚本
 - v53：简化 Chrome 扩展为最小稳定右键版，移除 content script 和 tabs 消息通道，避免 Service Worker 再次失效
 - v54：Chrome 扩展文件改为 Python 生成，避免 Bash 展开 JavaScript 模板字符串导致 Service Worker 失效
+- v62：Chrome 扩展改为后台 fetch 提交，不再打开 /submit 标签页
 - v61：Chrome/HTTP 提交 YouTube 链接时先探测清晰度并用最高具体 format id 下载，避免 yt-dlp 默认误选 360p format 18；安装包脚本统一 LF
 - v60：Chrome 扩展禁止误发 x.com/home；右键发送时剪贴板读不到会弹输入框手动粘贴真实链接
 - v59：Chrome 扩展改为“先复制真实链接，再右键发送”，右键提交时优先读取剪贴板；菜单提示改用 IP 示例

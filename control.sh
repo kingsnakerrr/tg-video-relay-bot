@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v61"
+APP_VERSION="v62"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -986,7 +986,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1127,9 +1127,14 @@ async function submitUrl(rawUrl) {{
     const submit = submitEndpoint();
     submit.searchParams.set("secret", SECRET);
     submit.searchParams.set("url", targetUrl);
-    const tab = await chrome.tabs.create({{ url: submit.href, active: false }});
-    if (tab && tab.id) {{
-      setTimeout(() => chrome.tabs.remove(tab.id).catch(() => {{}}), 5000);
+    const response = await fetch(submit.href, {{
+      method: "GET",
+      cache: "no-store",
+      credentials: "omit"
+    }});
+    if (!response.ok) {{
+      const text = await response.text().catch(() => "");
+      throw new Error(text || response.statusText || String(response.status));
     }}
     mark("OK");
     console.log("TG Relay submitted:", targetUrl);
@@ -1413,6 +1418,5 @@ PY_CHROME_EXTENSION
 }
 
 run "${1:-menu}" "${2:-}"
-
 
 
