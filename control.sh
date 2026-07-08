@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v58"
+APP_VERSION="v59"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -940,9 +940,10 @@ run() {
       if [ -z "${submit_url}" ]; then
         echo "Chrome right-click extension / Chrome 右键提交扩展"
         echo
-        echo "Enter your public submit URL. Examples / 输入你的公网提交地址，例如:"
-        echo "  http://zouter.hk.222321.xyz:8787/submit"
-        echo "  https://zouter.hk.222321.xyz/submit"
+        echo "Enter your VPS submit URL. Use IP, not domain, if your domain has HTTPS problems."
+        echo "请输入 VPS 提交地址。域名 HTTPS 有问题就直接用 IP。"
+        echo "Example / 示例:"
+        echo "  http://143.20.156.100:8787/submit"
         read -r -p "Submit URL [${default_submit_url}]: " submit_url
       fi
       [ -n "${submit_url}" ] || submit_url="${default_submit_url}"
@@ -985,7 +986,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead"],
     "host_permissions": [host_permission],
@@ -1009,6 +1010,18 @@ manifest = {
 
 background = f'''const SUBMIT_URL = {json.dumps(submit_url)};
 const SECRET = {json.dumps(secret)};
+
+function submitEndpoint() {{
+  try {{
+    const endpoint = new URL(SUBMIT_URL);
+    if (endpoint.protocol === "https:" && endpoint.port === "8787") {{
+      endpoint.protocol = "http:";
+    }}
+    return endpoint;
+  }} catch {{
+    return new URL(SUBMIT_URL);
+  }}
+}}
 
 function mark(text) {{
   chrome.action.setBadgeText({{ text }});
@@ -1034,7 +1047,7 @@ async function getContentScriptUrl(tab) {{
   let messageUrl = "";
   try {{
     if (tab && tab.id) {{
-      const response = await chrome.tabs.sendMessage(tab.id, {{ type: "get-right-click-url" }});
+      const response = await chrome.tabs.sendMessage(tab.id, {{ type: "get-submit-url" }});
       messageUrl = response && response.url ? response.url : "";
     }}
   }} catch (error) {{
@@ -1059,7 +1072,7 @@ async function submitUrl(rawUrl) {{
     return;
   }}
   try {{
-    const submit = new URL(SUBMIT_URL);
+    const submit = submitEndpoint();
     submit.searchParams.set("secret", SECRET);
     submit.searchParams.set("url", targetUrl);
     const tab = await chrome.tabs.create({{ url: submit.href, active: false }});
@@ -1216,13 +1229,24 @@ async function maybeSubmitCopiedLink() {
   }
 }
 
-document.addEventListener("click", (event) => {
-  if (looksLikeCopyLinkClick(event)) {
-    setTimeout(maybeSubmitCopiedLink, 400);
+async function getClipboardShareUrl() {
+  try {
+    const text = (await navigator.clipboard.readText()).trim();
+    const url = normalizeUrl(text);
+    return isSupportedShareUrl(url) ? url : "";
+  } catch (error) {
+    console.warn("TG Relay: cannot read clipboard", error);
+    return "";
   }
-}, true);
+}
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message && message.type === "get-submit-url") {
+    getClipboardShareUrl().then((clipboardUrl) => {
+      sendResponse({ url: clipboardUrl || lastRightClickUrl || location.href });
+    });
+    return true;
+  }
   if (message && message.type === "get-right-click-url") {
     sendResponse({ url: lastRightClickUrl });
   }
@@ -1238,7 +1262,7 @@ readme = """TG Video Relay Sender
 3. Load unpacked: select this chrome-tg-relay-extension folder
 4. Right-click an X/YouTube page or link and choose: 发送到 TG Relay 下载最高画质
 
-Tip: On X, the most reliable method is: click the X share button, click Copy link / 复制链接, then confirm the popup from this extension. It submits the real /status/ URL copied by X itself.
+Tip: On X, the most reliable method is: click the X share button, click Copy link / 复制链接, then right-click and choose 发送到 TG Relay 下载最高画质. The extension reads the copied real /status/ URL first.
 """
 (extension_dir / "README.txt").write_text(readme, encoding="utf-8")
 
