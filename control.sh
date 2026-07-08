@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v56"
+APP_VERSION="v57"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -948,7 +948,7 @@ run() {
       [ -n "${submit_url}" ] || submit_url="${default_submit_url}"
       case "${submit_url}" in
         http://*|https://*) ;;
-        *) submit_url="https://${submit_url}" ;;
+        *) submit_url="http://${submit_url}" ;;
       esac
       case "${submit_url}" in
         */submit) ;;
@@ -982,9 +982,9 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
-    "permissions": ["contextMenus", "activeTab", "tabs"],
+    "permissions": ["contextMenus", "activeTab", "tabs", "storage"],
     "host_permissions": [host_permission],
     "background": {"service_worker": "background.js"},
     "action": {"default_title": "Send current page to TG Relay"},
@@ -1028,13 +1028,24 @@ function cleanUrl(url) {{
 }}
 
 async function getContentScriptUrl(tab) {{
-  if (!tab || !tab.id) return "";
+  let messageUrl = "";
   try {{
-    const response = await chrome.tabs.sendMessage(tab.id, {{ type: "get-right-click-url" }});
-    return response && response.url ? response.url : "";
+    if (tab && tab.id) {{
+      const response = await chrome.tabs.sendMessage(tab.id, {{ type: "get-right-click-url" }});
+      messageUrl = response && response.url ? response.url : "";
+    }}
   }} catch (error) {{
-    return "";
+    messageUrl = "";
   }}
+  if (messageUrl) return messageUrl;
+  try {{
+    const stored = await chrome.storage.session.get(["tgRelayLastRightClickUrl", "tgRelayLastRightClickAt"]);
+    const ageMs = Date.now() - Number(stored.tgRelayLastRightClickAt || 0);
+    if (stored.tgRelayLastRightClickUrl && ageMs < 30000) {{
+      return stored.tgRelayLastRightClickUrl;
+    }}
+  }} catch (error) {{}}
+  return "";
 }}
 
 async function submitUrl(rawUrl) {{
@@ -1099,8 +1110,10 @@ function normalizeUrl(raw) {
 }
 
 function findStatusUrl(root) {
-  if (!root || !root.querySelectorAll) return null;
-  const links = Array.from(root.querySelectorAll("a[href]"));
+  if (!root) return null;
+  const links = [];
+  if (root.matches && root.matches("a[href]")) links.push(root);
+  if (root.querySelectorAll) links.push(...Array.from(root.querySelectorAll("a[href]")));
   const statusUrl = links
     .map((anchor) => anchor.href)
     .find((href) => /^https?:\\/\\/(x\\.com|twitter\\.com)\\/[^/]+\\/status\\/\\d+/.test(href));
@@ -1119,8 +1132,21 @@ function findUrlFromTarget(target) {
   const articleUrl = findStatusUrl(element.closest("article"));
   if (articleUrl) return articleUrl;
 
+  const tweetUrl = findStatusUrl(element.closest('[data-testid="tweet"]'));
+  if (tweetUrl) return tweetUrl;
+
+  if (document.elementsFromPoint) {
+    const pointElements = document.elementsFromPoint(window.tgRelayLastClientX || 0, window.tgRelayLastClientY || 0);
+    for (const pointElement of pointElements) {
+      const pointArticleUrl = findStatusUrl(pointElement.closest && pointElement.closest("article"));
+      if (pointArticleUrl) return pointArticleUrl;
+      const pointTweetUrl = findStatusUrl(pointElement.closest && pointElement.closest('[data-testid="tweet"]'));
+      if (pointTweetUrl) return pointTweetUrl;
+    }
+  }
+
   let node = element;
-  for (let i = 0; node && i < 8; i += 1, node = node.parentElement) {
+  for (let i = 0; node && i < 14; i += 1, node = node.parentElement) {
     const nearbyUrl = findStatusUrl(node);
     if (nearbyUrl) return nearbyUrl;
   }
@@ -1132,9 +1158,23 @@ function findUrlFromTarget(target) {
   return null;
 }
 
-document.addEventListener("contextmenu", (event) => {
+function rememberEvent(event) {
+  window.tgRelayLastClientX = event.clientX;
+  window.tgRelayLastClientY = event.clientY;
   lastRightClickUrl = findUrlFromTarget(event.target) || location.href;
+  try {
+    chrome.storage.session.set({
+      tgRelayLastRightClickUrl: lastRightClickUrl,
+      tgRelayLastRightClickAt: Date.now()
+    });
+  } catch {}
+}
+
+document.addEventListener("pointerdown", (event) => {
+  if (event.button === 2) rememberEvent(event);
 }, true);
+
+document.addEventListener("contextmenu", rememberEvent, true);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && message.type === "get-right-click-url") {
@@ -1152,7 +1192,7 @@ readme = """TG Video Relay Sender
 3. Load unpacked: select this chrome-tg-relay-extension folder
 4. Right-click an X/YouTube page or link and choose: 发送到 TG Relay 下载最高画质
 
-Tip: On the X home feed, right-click inside the post card or near the video/share area. The extension will try to find the real /status/ post URL automatically.
+Tip: On the X home feed, right-click inside the post card or near the video/share area. The extension records the nearby post card and submits the real /status/ URL instead of x.com/home.
 """
 (extension_dir / "README.txt").write_text(readme, encoding="utf-8")
 
@@ -1163,7 +1203,7 @@ with zipfile.ZipFile(extension_zip, "w", zipfile.ZIP_DEFLATED) as archive:
         if path.is_file():
             archive.write(path, pathlib.Path(extension_dir.name) / path.relative_to(extension_dir))
 PY_CHROME_EXTENSION
-      chmod 600 "${extension_dir}/background.js" "${extension_zip}" 2>/dev/null || true
+      chmod 600 "${extension_dir}/background.js" "${extension_dir}/content.js" "${extension_zip}" 2>/dev/null || true
       echo "Chrome right-click extension generated / Chrome 右键扩展已生成"
       echo "Submit API enabled / 提交接口启用: ${enabled:-unknown}"
       echo
