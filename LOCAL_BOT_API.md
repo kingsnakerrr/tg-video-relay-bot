@@ -73,7 +73,7 @@ BOT_API_BASE_URL=http://127.0.0.1:8081
 BOT_API_USE_LOCAL_FILE_URI=true
 MAX_UPLOAD_MB=1900
 AUTO_COMPRESS=false
-DOWNLOAD_FORMAT=bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best
+DOWNLOAD_FORMAT=bv*+ba/best
 UPLOAD_MODE=video
 ```
 

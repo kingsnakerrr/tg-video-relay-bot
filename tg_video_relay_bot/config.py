@@ -130,6 +130,7 @@ class Settings:
     poll_timeout: int
     worker_count: int
     telegram_resolution_menu: bool
+    telegram_resolution_auto_seconds: int
 
     @property
     def max_file_bytes(self) -> int:
@@ -204,4 +205,5 @@ def load_settings() -> Settings:
         poll_timeout=_env_int("POLL_TIMEOUT", 50),
         worker_count=max(1, _env_int("WORKER_COUNT", 1)),
         telegram_resolution_menu=_env_bool("TELEGRAM_RESOLUTION_MENU", True),
+        telegram_resolution_auto_seconds=max(0, _env_int("TELEGRAM_RESOLUTION_AUTO_SECONDS", 3)),
     )

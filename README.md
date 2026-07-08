@@ -22,9 +22,10 @@
 - v42：新增 Telegram 机器人内管理员按钮菜单和斜杠菜单，可在 TG 里执行状态、日志、更新、重启、停止、同步 cookies 等操作
 - v43：精简 VPS `x` 主菜单，合并 cookies 状态/直链设置/同步入口，安装时自动安装 yt-dlp JS runtime
 - v44：安装时自动尝试安装 Deno/yt-dlp JS runtime，失败也继续安装；安装结束显示手动安装、swap 虚拟内存和低内存 Local Bot API 编译命令
-- v45：安装步骤失败会自动重试一次；Local Bot API 默认按低内存方式安装，`BUILD_JOBS=1` 并自动准备 swap，失败后提示重新安装命令
+- v45：安装步骤失败会自动重试一次；Local Bot API 默认按低内存方式安装，`BUILD_JOBS=1`；旧版曾自动准备 swap，v48 起默认不自动创建
 - v46：修复 Debian trixie/Python 3.13 删除 `cgi` 标准库导致 HTTP submit API 启动失败的问题
 - v47：安装时可输入下载视频缓存目录，安装后可用 `x download-dir` 查看和修改
+- v48：安装时可选择安装目录，`x` 命令会自动绑定该目录；Telegram 发链接后 3 秒内可选清晰度，超时自动下载最高画质；默认下载最高可用，不再限制 1080p；Local Bot API 默认不自动创建 swap；新增 `x chrome` 显示电脑 Chrome 提交配置
 - `/id` 查看当前用户和聊天 ID
 - `/targets` 查看当前转发目标数量
 - `/status` 查看队列状态
@@ -47,9 +48,11 @@ bash <(curl -fsSL https://raw.githubusercontent.com/kingsnakerrr/tg-video-relay-
 
 安装脚本会提示你输入：
 
+- 是否使用默认安装目录 `/opt/tg-video-relay-bot`，也可以输入 `/data/opt/tg-video-relay-bot` 等自定义目录
 - Telegram Bot Token
 - 目标频道/群组 ID，多个用英文逗号隔开
 - 管理员 Telegram 用户 ID，多个用英文逗号隔开
+- 下载视频缓存目录，默认是安装目录下的 `downloads`
 - X cookies 同步链接，可回车跳过
 - YouTube cookies 同步链接，可回车跳过
 - Local Bot API `api_id` 和 `api_hash`，可回车跳过，后面还能用 `x local-api` 配置
@@ -86,6 +89,16 @@ x download-dir
 DOWNLOAD_DIR=/data/opt/tg-video-relay-bot/downloads
 ```
 
+### 电脑 Chrome 提交链接
+
+安装完成后执行：
+
+```bash
+x chrome
+```
+
+它会显示 Submit API 地址、secret、Chrome 站点搜索 URL 模板和书签按钮代码。最简单用法是在 Chrome 地址栏配置一个 `tg` 快捷搜索，以后复制 X/YouTube 链接后，地址栏输入 `tg ` 再粘贴链接回车，就会直接提交到 VPS 下载最高画质。
+
 ### 安装失败重试和低内存 Local Bot API
 
 安装脚本里安装程序、Python 依赖、yt-dlp、Deno 等步骤如果失败，会自动重试一次。第二次还失败，脚本会停下来并提示重新执行一键安装：
@@ -100,10 +113,16 @@ bash <(curl -fsSL https://raw.githubusercontent.com/kingsnakerrr/tg-video-relay-
 x js-runtime-install
 ```
 
-真正容易爆内存的是 Local Bot API 的 `telegram-bot-api` 源码编译。现在 `x local-api-install` 默认就是低内存安装，会用 `BUILD_JOBS=1` 单线程编译，并自动准备 swap：
+真正容易爆内存的是 Local Bot API 的 `telegram-bot-api` 源码编译。现在 `x local-api-install` 默认就是低内存安装，会用 `BUILD_JOBS=1` 单线程编译，但不会自动创建 swap：
 
 ```bash
 x local-api-install
+```
+
+如果编译时确实因为内存不足被 killed，再明确启用 swap：
+
+```bash
+ENABLE_SWAP=true BUILD_JOBS=1 x local-api-install
 ```
 
 如果 Local Bot API 安装失败，直接重新执行上面的命令；也可以后台编译并查看日志：
@@ -297,15 +316,15 @@ curl -L "你的COOKIE_SYNC_URL_X" | head
 ## 常见问题
 
 - 上传失败：确认机器人在目标频道/群组里有发消息权限。
-- YouTube 默认最高 1080p：`DOWNLOAD_FORMAT=bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best`。想 1080p 且不压缩，先装好 Local Bot API，然后执行 `x 1080p`。
-- Telegram 里直接发链接会返回可下载清晰度按钮，点选后才开始下载。iPhone 快捷指令不会弹按钮，会直接按默认最高 1080p 下载；源视频不到 1080p 时自动拿最高可用。
+- 默认下载最高可用：`DOWNLOAD_FORMAT=bv*+ba/best`。想大文件不压缩，先装好 Local Bot API，然后执行 `x local`。
+- Telegram 里直接发链接会返回可下载清晰度按钮，3 秒内可手动点选；不点就自动下载最高画质。iPhone 快捷指令和电脑 Chrome 提交不会弹按钮，会直接按默认最高可用下载。
 - 清晰度选择界面有“取消下载”按钮，X 和 YouTube 链接都支持。
 - 如果 YouTube 清晰度解析失败，机器人会先用“自动可用格式”兜底下载，避免任务直接死掉。想恢复 1080p/4K 选择，重点检查 `/opt/tg-video-relay-bot/cookies_youtube.txt` 是否有效。
-- 如果 YouTube 明明有 1080p/4K，但按钮只显示 360p，或选 1080p 后提示 403，通常是 YouTube 给 VPS/当前 yt-dlp client 限制了格式或下载地址。先执行 `x ytdlp-update`、`x 1080p`、`x restart`，再用 `x doctor` 确认 `YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android`；仍不行就给 `COOKIES_FILE` 配置 YouTube 登录 cookies。
-- 如果下载提示是 1080p，但上传后看着糊，先看机器人提示里的“上传文件”分辨率。公网 Bot API 模式超过约 50MB 会自动压缩，可能从 1080p 压到 720p/480p/360p。真正不压缩要安装并启用 Local Bot API，然后执行 `x original`。
+- 如果 YouTube 明明有 1080p/4K，但按钮只显示 360p，或选择后提示 403，通常是 YouTube 给 VPS/当前 yt-dlp client 限制了格式或下载地址。先执行 `x ytdlp-update`、`x restart`，再用 `x doctor` 确认 `YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android`；仍不行就更新 YouTube 登录 cookies。
+- 如果下载提示是高分辨率，但上传后看着糊，先看机器人提示里的“上传文件”分辨率。公网 Bot API 模式超过约 50MB 会自动压缩，可能从高分辨率压到 720p/480p/360p。真正不压缩要安装并启用 Local Bot API，然后执行 `x local`。
 - 下载后无论上传成功、上传失败还是任务失败，本地任务文件都会自动清理，避免占用 VPS 空间。
 - 不想在 Telegram 里选清晰度：把 `.env` 里的 `TELEGRAM_RESOLUTION_MENU=false`，然后执行 `x restart`。
-- 视频太大：公网 Bot API 只能约 50MB；不想压缩请用 `x local-api` 安装本地 Bot API，再用 `x 1080p`。
+- 视频太大：公网 Bot API 只能约 50MB；不想压缩请用 `x local-api` 安装本地 Bot API，再用 `x local`。
 - Telegram 不识别视频：把 `UPLOAD_MODE=document`，会作为文件发送。
 - YouTube/TikTok/X/Douyin 下载失败：升级 `yt-dlp`：`pip install -U yt-dlp`。
 - `Request Entity Too Large`：视频超过公共 Telegram Bot API 上传限制。默认 `MAX_UPLOAD_MB=49` 且 `AUTO_COMPRESS=true` 会自动压缩后再上传。改完 `.env` 后执行 `systemctl restart telegram-video-relay`。

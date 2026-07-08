@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v47"
+APP_VERSION="v48"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -12,7 +12,8 @@ ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
 LOCAL_API_NAME="${LOCAL_API_NAME:-telegram-bot-api}"
 LOCAL_API_ENV="${LOCAL_API_ENV:-/etc/telegram-bot-api.env}"
 LOCAL_API_PORT="${LOCAL_API_PORT:-8081}"
-DEFAULT_DOWNLOAD_FORMAT='bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best'
+DEFAULT_DOWNLOAD_FORMAT='bv*+ba/best'
+OLD_1080P_DOWNLOAD_FORMAT='bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best'
 
 need_root() {
   if [ "$(id -u)" -ne 0 ]; then
@@ -43,6 +44,7 @@ Usage / 用法:
   x cookies            Sync cookies now / 立即同步 cookies
   x cookies-menu       Show/change/sync cookie links / 查看、修改、同步 cookies
   x download-dir       Show/change download cache directory / 查看或修改下载缓存目录
+  x chrome             Show Chrome submit setup / 显示 Chrome 提交配置
   x low-memory-help    Show swap and low-memory build commands / 显示 swap 和低内存编译命令
   x shortcut           Show iPhone Shortcut submit settings / 查看 iPhone 快捷指令配置
   x env                Edit .env config / 编辑 .env 配置
@@ -96,12 +98,13 @@ Actions / 操作菜单
 11) Test submit X URL / 测试提交 X 链接
 12) Test submit YouTube URL / 测试提交 YouTube 链接
 13) iPhone Shortcut settings / iPhone 快捷指令配置
-14) Download/cache directory / 下载缓存目录
-15) Edit config / 编辑配置
-16) Update / 更新
-17) Reinstall / 重装
-18) Uninstall service, keep files / 卸载服务但保留文件
-19) Purge everything / 彻底删除
+14) Chrome submit settings / Chrome 右键或书签提交配置
+15) Download/cache directory / 下载缓存目录
+16) Edit config / 编辑配置
+17) Update / 更新
+18) Reinstall / 重装
+19) Uninstall service, keep files / 卸载服务但保留文件
+20) Purge everything / 彻底删除
 0) Exit / 退出
 EOF
   echo
@@ -120,12 +123,13 @@ EOF
     11) read -r -p "X URL: " test_url; run test-submit "${test_url}" ;;
     12) read -r -p "YouTube URL: " test_url; run test-submit "${test_url}" ;;
     13) run shortcut ;;
-    14) run download-dir ;;
-    15) run env ;;
-    16) run update ;;
-    17) run reinstall ;;
-    18) run uninstall ;;
-    19) run purge ;;
+    14) run chrome ;;
+    15) run download-dir ;;
+    16) run env ;;
+    17) run update ;;
+    18) run reinstall ;;
+    19) run uninstall ;;
+    20) run purge ;;
     0|q|Q) exit 0 ;;
     *) echo "Invalid choice. / 选择无效。"; exit 1 ;;
   esac
@@ -514,12 +518,17 @@ Local Bot API:
   telegram-bot-api 需要源码编译，低内存 VPS 容易爆内存。
   The installer already uses low-memory mode by default: BUILD_JOBS=1.
   安装器默认已经使用低内存模式: BUILD_JOBS=1。
+  It does not create swap unless ENABLE_SWAP=true is set.
+  默认不会创建虚拟内存，除非你设置 ENABLE_SWAP=true。
 
 Normal install / 正常安装:
   x local-api-install
 
 Retry low-memory install / 重新低内存安装:
   BUILD_JOBS=1 x local-api-install
+
+Retry with temporary swap enabled / 明确启用 swap 后重试:
+  ENABLE_SWAP=true BUILD_JOBS=1 x local-api-install
 
 Background build / 后台编译:
   BUILD_JOBS=1 x local-api-install-bg
@@ -543,11 +552,11 @@ set_1080p_original_defaults() {
     set_env_value "${env_file}" AUTO_COMPRESS "false"
     bash "${APP_DIR}/install_local_bot_api.sh" switch
     echo
-    echo "Done. YouTube will prefer up to 1080p and upload without compression."
-    echo "完成。YouTube 会优先下载最高 1080p，并使用不压缩上传。"
+    echo "Done. Downloads will prefer the highest available quality and upload without compression."
+    echo "完成。下载会优先最高可用画质，并使用不压缩上传。"
   else
-    echo "Saved DOWNLOAD_FORMAT for 1080p, but Local Bot API is not active."
-    echo "已保存 1080p 下载格式，但本地 Bot API 还没运行。"
+    echo "Saved highest-quality DOWNLOAD_FORMAT, but Local Bot API is not active."
+    echo "已保存最高可用下载格式，但本地 Bot API 还没运行。"
     echo
     echo "No-compress large uploads need Local Bot API. Run:"
     echo "不压缩上传大视频需要本地 Bot API，请执行："
@@ -605,6 +614,9 @@ ensure_upload_env() {
   grep -q '^BOT_API_USE_LOCAL_FILE_URI=' "${env_file}" || printf 'BOT_API_USE_LOCAL_FILE_URI=false\n' >> "${env_file}"
   grep -q '^DOWNLOAD_DIR=' "${env_file}" || printf 'DOWNLOAD_DIR=%s/downloads\n' "${APP_DIR}" >> "${env_file}"
   grep -q '^MAX_UPLOAD_MB=' "${env_file}" || printf 'MAX_UPLOAD_MB=49\n' >> "${env_file}"
+  if grep -Fqx "DOWNLOAD_FORMAT=${OLD_1080P_DOWNLOAD_FORMAT}" "${env_file}"; then
+    set_env_value "${env_file}" DOWNLOAD_FORMAT "${DEFAULT_DOWNLOAD_FORMAT}"
+  fi
   grep -q '^DOWNLOAD_FORMAT=' "${env_file}" || printf 'DOWNLOAD_FORMAT=%s\n' "${DEFAULT_DOWNLOAD_FORMAT}" >> "${env_file}"
   grep -q '^AUTO_COMPRESS=' "${env_file}" || printf 'AUTO_COMPRESS=true\n' >> "${env_file}"
   grep -q '^COMPRESS_AUDIO_KBPS=' "${env_file}" || printf 'COMPRESS_AUDIO_KBPS=96\n' >> "${env_file}"
@@ -623,6 +635,7 @@ ensure_upload_env() {
     set_env_value "${env_file}" COOKIES_FILE ""
   fi
   grep -q '^TELEGRAM_RESOLUTION_MENU=' "${env_file}" || printf 'TELEGRAM_RESOLUTION_MENU=true\n' >> "${env_file}"
+  grep -q '^TELEGRAM_RESOLUTION_AUTO_SECONDS=' "${env_file}" || printf 'TELEGRAM_RESOLUTION_AUTO_SECONDS=3\n' >> "${env_file}"
 }
 
 ensure_env_defaults() {
@@ -879,6 +892,40 @@ run() {
       echo "For iPhone outside your VPS, open TCP port ${port} or use HTTPS reverse proxy."
       echo "如果 iPhone 不在 VPS 本机，需要放行 TCP ${port} 或使用 HTTPS 反向代理。"
       ;;
+    chrome|browser-submit|chrome-submit)
+      need_root
+      ensure_env_defaults
+      port="$(env_value SUBMIT_API_PORT)"
+      secret="$(env_value SUBMIT_API_SECRET)"
+      enabled="$(env_value SUBMIT_API_ENABLED)"
+      host_hint="$(hostname -I 2>/dev/null | awk '{print $1}')"
+      [ -n "${port}" ] || port="8787"
+      [ -n "${host_hint}" ] || host_hint="YOUR_VPS_IP_OR_DOMAIN"
+      submit_url="http://${host_hint}:${port}/submit"
+      echo "Chrome submit settings / Chrome 提交配置"
+      echo "Submit API enabled / 提交接口启用: ${enabled:-unknown}"
+      echo
+      echo "Replace host with your domain if needed / 如果你用域名访问，把下面 IP 换成域名:"
+      echo "  ${submit_url}"
+      echo
+      echo "Chrome site-search URL template / Chrome 站点搜索 URL 模板:"
+      echo "  ${submit_url}?secret=${secret}&url=%s"
+      echo
+      echo "Bookmarklet / 书签按钮，打开视频页面后点一下即可提交当前页面:"
+      printf "  javascript:(()=>{fetch('%s',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'secret=%s&url='+encodeURIComponent(location.href)}).then(r=>r.text()).then(t=>alert(t)).catch(e=>alert(e))})()\n" "${submit_url}" "${secret}"
+      echo
+      echo "Chrome setup / Chrome 设置:"
+      echo "  1. Open chrome://settings/searchEngines / 打开 chrome://settings/searchEngines"
+      echo "  2. Add site search / 添加站点搜索"
+      echo "  3. Name: Send to TG Relay"
+      echo "  4. Shortcut: tg"
+      echo "  5. URL: paste the template above / URL 粘贴上面的模板"
+      echo "  6. Copy a YouTube/X URL, type 'tg ' in address bar, paste URL, press Enter."
+      echo "     复制 YouTube/X 链接后，地址栏输入 'tg '，粘贴链接，回车提交。"
+      echo
+      echo "For true link right-click extension files, ask me to generate the Chrome extension package."
+      echo "如果要真正右键链接直接提交，让我生成 Chrome 扩展包。"
+      ;;
     env|config)
       need_root
       "${EDITOR:-nano}" "${APP_DIR}/.env"
@@ -898,8 +945,19 @@ run() {
       "${APP_DIR}/.venv/bin/python" -m pip install --upgrade yt-dlp
       ensure_env_defaults
       if [ -f "${APP_DIR}/control.sh" ]; then
-        install -m 755 "${APP_DIR}/control.sh" "${CONTROL_BIN}"
-        install -m 755 "${APP_DIR}/control.sh" "${ALT_CONTROL_BIN}"
+        chmod 755 "${APP_DIR}/control.sh"
+        cat > "${CONTROL_BIN}" <<EOF_CONTROL
+#!/usr/bin/env bash
+export APP_DIR="${APP_DIR}"
+exec "${APP_DIR}/control.sh" "\$@"
+EOF_CONTROL
+        chmod 755 "${CONTROL_BIN}"
+        cat > "${ALT_CONTROL_BIN}" <<EOF_CONTROL
+#!/usr/bin/env bash
+export APP_DIR="${APP_DIR}"
+exec "${APP_DIR}/control.sh" "\$@"
+EOF_CONTROL
+        chmod 755 "${ALT_CONTROL_BIN}"
       fi
       systemctl restart "${APP_NAME}"
       systemctl status "${APP_NAME}" --no-pager

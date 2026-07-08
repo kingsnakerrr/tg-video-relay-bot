@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import logging
 import secrets
@@ -6,11 +6,12 @@ import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock, Timer
 from typing import Any
 
 from .config import Settings, load_settings
 from .downloader import DownloadError, probe_resolutions
-from .formats import DEFAULT_DOWNLOAD_FORMAT, DEFAULT_MAX_HEIGHT, SAFE_FALLBACK_DOWNLOAD_FORMAT
+from .formats import DEFAULT_DOWNLOAD_FORMAT, SAFE_FALLBACK_DOWNLOAD_FORMAT
 from .jobs import JobQueue, VideoJob
 from .links import extract_urls
 from .submit_server import SubmitServerError, start_submit_server
@@ -34,6 +35,7 @@ class PendingResolutionSelection:
     source_user_id: int | None
     title: str
     choices: dict[str, tuple[str, str]]
+    auto_choice_key: str
     created_at: float
 
 
@@ -201,8 +203,8 @@ def _enqueue_default_job(
         queued_text = "已按自动可用格式加入队列"
     else:
         download_format = settings.download_format or DEFAULT_DOWNLOAD_FORMAT
-        resolution_label = "默认 1080p / 最高可用"
-        queued_text = "已按默认 1080p 加入队列"
+        resolution_label = "最高可用"
+        queued_text = "已按最高可用加入队列"
 
     position = job_queue.enqueue(
         VideoJob(
@@ -214,7 +216,7 @@ def _enqueue_default_job(
             resolution_label=resolution_label,
         )
     )
-    text = f"{queued_text}：{url}\n当前排队：{position}"
+    text = f"{queued_text}: {url}\n当前排队: {position}"
     if reason:
         text = f"{reason}\n{text}"
     api.send_message(chat_id, text, reply_to_message_id=message_id)
@@ -225,12 +227,14 @@ def _send_resolution_menu(
     settings: Settings,
     job_queue: JobQueue,
     pending: dict[str, PendingResolutionSelection],
+    pending_lock: Lock,
     chat_id: int | str,
     message_id: int | None,
     user_id: int | None,
     url: str,
 ) -> None:
-    _cleanup_pending_selections(pending)
+    with pending_lock:
+        _cleanup_pending_selections(pending)
     try:
         probe = probe_resolutions(url, settings)
     except DownloadError as exc:
@@ -242,31 +246,24 @@ def _send_resolution_menu(
             message_id,
             user_id,
             url,
-            reason=f"获取清晰度失败，先按自动可用格式下载：{exc}",
+            reason=f"获取清晰度失败，先按自动可用格式下载: {exc}",
             safe_fallback=True,
         )
         return
 
     token = secrets.token_urlsafe(8)
-    default_label = "默认 1080p"
-    default_choice = next(
-        (choice for choice in probe.choices if probe.default_height and choice.height == probe.default_height),
-        None,
-    )
-    if probe.default_height and probe.default_height < DEFAULT_MAX_HEIGHT:
-        default_label = f"默认 1080p（最高 {default_choice.label if default_choice else f'{probe.default_height}p'}）"
-    elif default_choice:
-        default_label = f"默认 1080p（{default_choice.label}）"
-
-    default_format = default_choice.format_selector if default_choice else (settings.download_format or DEFAULT_DOWNLOAD_FORMAT)
+    highest_choice = probe.choices[0] if probe.choices else None
+    default_label = f"默认最高画质（{highest_choice.label}）" if highest_choice else "默认最高画质"
+    default_format = highest_choice.format_selector if highest_choice else (settings.download_format or DEFAULT_DOWNLOAD_FORMAT)
+    auto_choice_key = "auto"
     choices: dict[str, tuple[str, str]] = {
-        "auto": (default_format, default_label),
+        auto_choice_key: (default_format, default_label),
     }
     for choice in probe.choices:
         choices[str(choice.height)] = (choice.format_selector, choice.label)
 
     keyboard: list[list[dict[str, str]]] = [
-        [{"text": default_label, "callback_data": _callback_data(token, "auto")}],
+        [{"text": default_label, "callback_data": _callback_data(token, auto_choice_key)}],
     ]
     row: list[dict[str, str]] = []
     for choice in probe.choices:
@@ -278,26 +275,72 @@ def _send_resolution_menu(
         keyboard.append(row)
     keyboard.append([{"text": "取消下载", "callback_data": _callback_data(token, "cancel")}])
 
-    pending[token] = PendingResolutionSelection(
-        url=url,
-        source_chat_id=chat_id,
-        source_message_id=message_id,
-        source_user_id=user_id,
-        title=probe.title,
-        choices=choices,
-        created_at=time.time(),
-    )
+    with pending_lock:
+        pending[token] = PendingResolutionSelection(
+            url=url,
+            source_chat_id=chat_id,
+            source_message_id=message_id,
+            source_user_id=user_id,
+            title=probe.title,
+            choices=choices,
+            auto_choice_key=auto_choice_key,
+            created_at=time.time(),
+        )
 
     title = _short_text(probe.title)
     api.send_message(
         chat_id,
-        "请选择下载清晰度：\n"
+        "请选择下载清晰度:\n"
         f"{title}\n\n"
-        "默认会选最高 1080p；如果源视频低于 1080p，就自动选最高可用。"
-        "已尽量隐藏 DRM/受限格式，大小是 yt-dlp 估算值。",
+        f"{settings.telegram_resolution_auto_seconds} 秒内不选择，会自动下载最高画质。大小是 yt-dlp 估算值。",
         reply_to_message_id=message_id,
         reply_markup={"inline_keyboard": keyboard},
     )
+    if settings.telegram_resolution_auto_seconds > 0:
+        timer = Timer(
+            settings.telegram_resolution_auto_seconds,
+            _auto_enqueue_resolution,
+            args=(api, job_queue, pending, pending_lock, token, settings.telegram_resolution_auto_seconds),
+        )
+        timer.daemon = True
+        timer.start()
+
+
+def _auto_enqueue_resolution(
+    api: TelegramApi,
+    job_queue: JobQueue,
+    pending: dict[str, PendingResolutionSelection],
+    pending_lock: Lock,
+    token: str,
+    auto_seconds: int,
+) -> None:
+    with pending_lock:
+        selection = pending.pop(token, None)
+    if selection is None:
+        return
+
+    choice = selection.choices.get(selection.auto_choice_key)
+    if choice is None:
+        return
+    download_format, label = choice
+    position = job_queue.enqueue(
+        VideoJob(
+            source_chat_id=selection.source_chat_id,
+            source_message_id=selection.source_message_id,
+            source_user_id=selection.source_user_id,
+            url=selection.url,
+            download_format=download_format,
+            resolution_label=label,
+        )
+    )
+    try:
+        api.send_message(
+            selection.source_chat_id,
+            f"{auto_seconds} 秒未选择，已自动选择最高画质: {label}\n已加入队列: {selection.url}\n当前排队: {position}",
+            reply_to_message_id=selection.source_message_id,
+        )
+    except TelegramApiError:
+        logging.exception("Failed to notify auto resolution selection")
 
 
 def _handle_resolution_callback(
@@ -305,6 +348,7 @@ def _handle_resolution_callback(
     settings: Settings,
     job_queue: JobQueue,
     pending: dict[str, PendingResolutionSelection],
+    pending_lock: Lock,
     callback_query: dict[str, Any],
 ) -> bool:
     data = str(callback_query.get("data") or "")
@@ -325,14 +369,12 @@ def _handle_resolution_callback(
         return True
 
     _, token, choice_key = parts
-    _cleanup_pending_selections(pending)
-    selection = pending.get(token)
-    if selection is None:
-        api.answer_callback_query(callback_id, "这个选择已过期，请重新发送链接。", show_alert=True)
-        return True
-
     if choice_key == "cancel":
-        pending.pop(token, None)
+        with pending_lock:
+            selection = pending.pop(token, None)
+        if selection is None:
+            api.answer_callback_query(callback_id, "这个选择已过期或已自动开始下载，请重新发送链接。", show_alert=True)
+            return True
         api.answer_callback_query(callback_id, "已取消下载。")
         message = callback_query.get("message") or {}
         chat = message.get("chat") or {}
@@ -343,14 +385,21 @@ def _handle_resolution_callback(
                 api.edit_message_text(
                     callback_chat_id,
                     int(callback_message_id),
-                    f"已取消下载：{selection.url}",
+                    f"已取消下载: {selection.url}",
                 )
             except TelegramApiError:
                 api.send_message(
                     selection.source_chat_id,
-                    f"已取消下载：{selection.url}",
+                    f"已取消下载: {selection.url}",
                     reply_to_message_id=selection.source_message_id,
                 )
+        return True
+
+    with pending_lock:
+        _cleanup_pending_selections(pending)
+        selection = pending.pop(token, None)
+    if selection is None:
+        api.answer_callback_query(callback_id, "这个选择已过期或已自动开始下载，请重新发送链接。", show_alert=True)
         return True
 
     choice = selection.choices.get(choice_key)
@@ -369,7 +418,6 @@ def _handle_resolution_callback(
             resolution_label=label,
         )
     )
-    pending.pop(token, None)
     api.answer_callback_query(callback_id, "已加入队列。")
 
     message = callback_query.get("message") or {}
@@ -381,16 +429,17 @@ def _handle_resolution_callback(
             api.edit_message_text(
                 callback_chat_id,
                 int(callback_message_id),
-                f"已选择：{label}\n已加入队列：{selection.url}\n当前排队：{position}",
+                f"已选择: {label}\n已加入队列: {selection.url}\n当前排队: {position}",
             )
+            return True
         except TelegramApiError:
-            api.send_message(
-                selection.source_chat_id,
-                f"已选择：{label}\n已加入队列：{selection.url}\n当前排队：{position}",
-                reply_to_message_id=selection.source_message_id,
-            )
+            pass
+    api.send_message(
+        selection.source_chat_id,
+        f"已选择: {label}\n已加入队列: {selection.url}\n当前排队: {position}",
+        reply_to_message_id=selection.source_message_id,
+    )
     return True
-
 
 def _handle_admin_callback(
     api: TelegramApi,
@@ -589,6 +638,7 @@ def _handle_message(
     settings: Settings,
     job_queue: JobQueue,
     pending: dict[str, PendingResolutionSelection],
+    pending_lock: Lock,
     message: dict[str, Any],
 ) -> None:
     text = _message_text(message)
@@ -612,7 +662,7 @@ def _handle_message(
 
     for url in urls:
         if settings.telegram_resolution_menu:
-            _send_resolution_menu(api, settings, job_queue, pending, chat_id, message_id, user_id, url)
+            _send_resolution_menu(api, settings, job_queue, pending, pending_lock, chat_id, message_id, user_id, url)
             continue
 
         position = job_queue.enqueue(
@@ -638,6 +688,7 @@ def run_bot(settings: Settings) -> None:
     job_queue = JobQueue(api, settings)
     job_queue.start()
     pending_resolution_selections: dict[str, PendingResolutionSelection] = {}
+    pending_resolution_lock = Lock()
 
     try:
         api.set_my_commands(
@@ -687,12 +738,13 @@ def run_bot(settings: Settings) -> None:
                     settings,
                     job_queue,
                     pending_resolution_selections,
+                    pending_resolution_lock,
                     callback_query,
                 ):
                     continue
                 message = _message_from_update(update)
                 if message:
-                    _handle_message(api, settings, job_queue, pending_resolution_selections, message)
+                    _handle_message(api, settings, job_queue, pending_resolution_selections, pending_resolution_lock, message)
         except TelegramApiError as exc:
             logging.warning("Telegram API error: %s", exc)
             time.sleep(5)
@@ -714,3 +766,4 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
     settings = load_settings()
     run_bot(settings)
+

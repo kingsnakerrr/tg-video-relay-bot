@@ -2,16 +2,20 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v47"
-APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
+APP_VERSION="v48"
+DEFAULT_APP_DIR="/opt/tg-video-relay-bot"
+APP_DIR_FROM_ENV="${APP_DIR:-}"
+APP_DIR="${APP_DIR:-${DEFAULT_APP_DIR}}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-07.2"
+INSTALLER_VERSION="2026-07-08.1"
 DENO_INSTALL_STATUS="skipped"
+DEFAULT_DOWNLOAD_FORMAT="bv*+ba/best"
+OLD_1080P_DOWNLOAD_FORMAT="bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best"
 
 retry_or_die() {
   local label="$1"
@@ -123,6 +127,21 @@ case "${1:-}" in
     exit 0
     ;;
 esac
+
+if [ -z "${APP_DIR_FROM_ENV}" ]; then
+  echo
+  echo "Install directory / 安装目录"
+  read -r -p "Use default ${DEFAULT_APP_DIR}? [Y/n] / 是否使用默认目录 ${DEFAULT_APP_DIR}? [Y/n]: " use_default_dir
+  case "${use_default_dir}" in
+    n|N|no|NO|No)
+      read -r -p "Enter install directory / 请输入安装目录: " custom_app_dir
+      [ -n "${custom_app_dir}" ] || die "Install directory cannot be empty. / 安装目录不能为空。"
+      APP_DIR="${custom_app_dir}"
+      ;;
+  esac
+else
+  echo "Using APP_DIR from environment / 使用环境变量 APP_DIR: ${APP_DIR}"
+fi
 
 step "Installing system packages / 安装系统依赖"
 if command -v apt >/dev/null 2>&1; then
@@ -244,7 +263,7 @@ BOT_API_USE_LOCAL_FILE_URI=false
 TARGET_CHAT_IDS=${TARGET_CHAT_IDS}
 ALLOWED_USER_IDS=${ALLOWED_USER_IDS}
 DOWNLOAD_DIR=${DOWNLOAD_DIR_VALUE}
-DOWNLOAD_FORMAT=bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best
+DOWNLOAD_FORMAT=${DEFAULT_DOWNLOAD_FORMAT}
 MERGE_OUTPUT_FORMAT=mp4
 MAX_FILE_MB=1900
 MAX_UPLOAD_MB=49
@@ -269,6 +288,7 @@ UPLOAD_RETRIES=3
 POLL_TIMEOUT=50
 WORKER_COUNT=1
 TELEGRAM_RESOLUTION_MENU=true
+TELEGRAM_RESOLUTION_AUTO_SECONDS=3
 SUBMIT_API_ENABLED=true
 SUBMIT_API_HOST=0.0.0.0
 SUBMIT_API_PORT=8787
@@ -281,7 +301,10 @@ fi
 
 grep -q '^MAX_UPLOAD_MB=' .env || printf '\nMAX_UPLOAD_MB=49\n' >> .env
 grep -q '^DOWNLOAD_DIR=' .env || printf 'DOWNLOAD_DIR=%s/downloads\n' "${APP_DIR}" >> .env
-grep -q '^DOWNLOAD_FORMAT=' .env || printf 'DOWNLOAD_FORMAT=bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best\n' >> .env
+if grep -Fqx "DOWNLOAD_FORMAT=${OLD_1080P_DOWNLOAD_FORMAT}" .env; then
+  sed -i "s|^DOWNLOAD_FORMAT=.*|DOWNLOAD_FORMAT=${DEFAULT_DOWNLOAD_FORMAT}|" .env
+fi
+grep -q '^DOWNLOAD_FORMAT=' .env || printf 'DOWNLOAD_FORMAT=%s\n' "${DEFAULT_DOWNLOAD_FORMAT}" >> .env
 grep -q '^BOT_API_BASE_URL=' .env || printf 'BOT_API_BASE_URL=https://api.telegram.org\n' >> .env
 grep -q '^BOT_API_USE_LOCAL_FILE_URI=' .env || printf 'BOT_API_USE_LOCAL_FILE_URI=false\n' >> .env
 grep -q '^AUTO_COMPRESS=' .env || printf 'AUTO_COMPRESS=true\n' >> .env
@@ -292,6 +315,7 @@ grep -q '^YTDLP_FORCE_IPV4=' .env || printf 'YTDLP_FORCE_IPV4=true\n' >> .env
 grep -q '^YTDLP_HTTP_CHUNK_SIZE=' .env || printf 'YTDLP_HTTP_CHUNK_SIZE=10M\n' >> .env
 grep -q '^YOUTUBE_PLAYER_CLIENTS=' .env || printf 'YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android\n' >> .env
 grep -q '^TELEGRAM_RESOLUTION_MENU=' .env || printf 'TELEGRAM_RESOLUTION_MENU=true\n' >> .env
+grep -q '^TELEGRAM_RESOLUTION_AUTO_SECONDS=' .env || printf 'TELEGRAM_RESOLUTION_AUTO_SECONDS=3\n' >> .env
 if grep -q '^COOKIES_FILE=$' .env; then
   sed -i "s|^COOKIES_FILE=$|COOKIES_FILE=|" .env
 fi
@@ -346,8 +370,19 @@ EOF_SERVICE
 
 step "Installing control command / 安装控制命令"
 if [ -f "${APP_DIR}/control.sh" ]; then
-  install -m 755 "${APP_DIR}/control.sh" "${CONTROL_BIN}"
-  install -m 755 "${APP_DIR}/control.sh" "${ALT_CONTROL_BIN}"
+  chmod 755 "${APP_DIR}/control.sh"
+  cat > "${CONTROL_BIN}" <<EOF_CONTROL
+#!/usr/bin/env bash
+export APP_DIR="${APP_DIR}"
+exec "${APP_DIR}/control.sh" "\$@"
+EOF_CONTROL
+  chmod 755 "${CONTROL_BIN}"
+  cat > "${ALT_CONTROL_BIN}" <<EOF_CONTROL
+#!/usr/bin/env bash
+export APP_DIR="${APP_DIR}"
+exec "${APP_DIR}/control.sh" "\$@"
+EOF_CONTROL
+  chmod 755 "${ALT_CONTROL_BIN}"
 else
   echo "WARNING: control.sh not found; skipping ${CONTROL_BIN}"
   echo "警告: 找不到 control.sh，跳过 ${CONTROL_BIN}"
@@ -377,8 +412,10 @@ if [ "${DENO_INSTALL_STATUS}" = "failed" ]; then
 fi
 echo
 echo "Local Bot API low-memory install / Local Bot API 低内存安装:"
-echo "  The Local Bot API installer uses BUILD_JOBS=1 by default and prepares swap automatically."
-echo "  Local Bot API 安装默认用 BUILD_JOBS=1 单线程编译，并会自动准备 swap。"
+echo "  Normal install does not create swap. Local Bot API uses BUILD_JOBS=1 by default."
+echo "  普通安装不会增加虚拟内存。Local Bot API 默认用 BUILD_JOBS=1 单线程编译。"
+echo "  If you really need swap for compiling, run / 如果编译确实需要 swap，再执行:"
+echo "  ENABLE_SWAP=true BUILD_JOBS=1 x local-api-install"
 echo
 echo "If Local Bot API install fails, rerun / 如果 Local Bot API 安装失败，重新执行:"
 echo "  x local-api-install"

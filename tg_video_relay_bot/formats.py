@@ -2,6 +2,7 @@ from __future__ import annotations
 
 
 DEFAULT_MAX_HEIGHT = 1080
+HIGHEST_DOWNLOAD_FORMAT = "bv*+ba/best"
 
 
 def format_for_max_height(max_height: int = DEFAULT_MAX_HEIGHT) -> str:
@@ -22,5 +23,5 @@ def format_for_exact_height(height: int) -> str:
     )
 
 
-DEFAULT_DOWNLOAD_FORMAT = format_for_max_height()
+DEFAULT_DOWNLOAD_FORMAT = HIGHEST_DOWNLOAD_FORMAT
 SAFE_FALLBACK_DOWNLOAD_FORMAT = "best/bv*+ba/b"

@@ -5,8 +5,8 @@ APP_NAME="${APP_NAME:-telegram-video-relay}"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 LOCAL_API_NAME="${LOCAL_API_NAME:-telegram-bot-api}"
 LOCAL_API_REPO="${LOCAL_API_REPO:-https://github.com/tdlib/telegram-bot-api.git}"
-LOCAL_API_SRC="${LOCAL_API_SRC:-/opt/telegram-bot-api}"
-LOCAL_API_BUILD="${LOCAL_API_BUILD:-/opt/telegram-bot-api/build}"
+LOCAL_API_SRC="${LOCAL_API_SRC:-${APP_DIR}/telegram-bot-api-src}"
+LOCAL_API_BUILD="${LOCAL_API_BUILD:-${LOCAL_API_SRC}/build}"
 LOCAL_API_ENV="${LOCAL_API_ENV:-/etc/telegram-bot-api.env}"
 LOCAL_API_SERVICE="/etc/systemd/system/${LOCAL_API_NAME}.service"
 LOCAL_API_HOST="${LOCAL_API_HOST:-127.0.0.1}"
@@ -15,7 +15,8 @@ BUILD_JOBS="${BUILD_JOBS:-1}"
 INSTALL_LOG="${INSTALL_LOG:-/var/log/tg-video-relay-local-api-install.log}"
 SWAP_FILE="${SWAP_FILE:-/swapfile-tg-video-relay}"
 SWAP_SIZE="${SWAP_SIZE:-4G}"
-DEFAULT_DOWNLOAD_FORMAT='bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best'
+ENABLE_SWAP="${ENABLE_SWAP:-false}"
+DEFAULT_DOWNLOAD_FORMAT='bv*+ba/best'
 
 need_root() {
   if [ "$(id -u)" -ne 0 ]; then
@@ -146,6 +147,21 @@ ensure_swap() {
     printf '%s none swap sw 0 0\n' "${SWAP_FILE}" >> /etc/fstab
   fi
   free -h || true
+}
+
+maybe_prepare_swap() {
+  case "${ENABLE_SWAP}" in
+    1|true|TRUE|yes|YES|y|Y|on|ON)
+      ensure_swap
+      ;;
+    *)
+      echo
+      echo "Swap unchanged / 不修改虚拟内存。"
+      echo "If the build is killed by low memory, rerun:"
+      echo "如果编译因为内存不足被 killed，再执行:"
+      echo "  ENABLE_SWAP=true BUILD_JOBS=1 x local-api-install"
+      ;;
+  esac
 }
 
 build_local_api() {
@@ -297,7 +313,7 @@ EOF
 
 install_all() {
   install_packages
-  ensure_swap
+  maybe_prepare_swap
   write_local_env
   build_local_api
   write_service
@@ -314,7 +330,7 @@ install_without_prompt() {
     exit 1
   }
   install_packages
-  ensure_swap
+  maybe_prepare_swap
   build_local_api
   write_service
   start_local_api
