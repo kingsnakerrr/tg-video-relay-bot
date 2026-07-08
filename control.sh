@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v55"
+APP_VERSION="v56"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -982,12 +982,25 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs"],
     "host_permissions": [host_permission],
     "background": {"service_worker": "background.js"},
     "action": {"default_title": "Send current page to TG Relay"},
+    "content_scripts": [
+        {
+            "matches": [
+                "https://x.com/*",
+                "https://twitter.com/*",
+                "https://www.youtube.com/*",
+                "https://youtu.be/*"
+            ],
+            "js": ["content.js"],
+            "run_at": "document_idle",
+            "all_frames": False,
+        }
+    ],
 }
 (extension_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -1011,6 +1024,16 @@ function cleanUrl(url) {{
     return parsed.href;
   }} catch {{
     return String(url || "");
+  }}
+}}
+
+async function getContentScriptUrl(tab) {{
+  if (!tab || !tab.id) return "";
+  try {{
+    const response = await chrome.tabs.sendMessage(tab.id, {{ type: "get-right-click-url" }});
+    return response && response.url ? response.url : "";
+  }} catch (error) {{
+    return "";
   }}
 }}
 
@@ -1047,8 +1070,9 @@ chrome.runtime.onInstalled.addListener(() => {{
   }});
 }});
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {{
-  const targetUrl = info.linkUrl || info.srcUrl || info.pageUrl || (tab && tab.url);
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {{
+  const pageCardUrl = await getContentScriptUrl(tab);
+  const targetUrl = info.linkUrl || pageCardUrl || info.srcUrl || info.pageUrl || (tab && tab.url);
   submitUrl(targetUrl);
 }});
 
@@ -1058,6 +1082,69 @@ chrome.action.onClicked.addListener((tab) => {{
 '''
 (extension_dir / "background.js").write_text(background, encoding="utf-8")
 
+content = '''let lastRightClickUrl = null;
+
+function normalizeUrl(raw) {
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw, location.href);
+    const statusMatch = parsed.pathname.match(/^\\/([^/]+)\\/status\\/(\\d+)/);
+    if ((parsed.hostname === "x.com" || parsed.hostname === "twitter.com") && statusMatch) {
+      return parsed.origin + "/" + statusMatch[1] + "/status/" + statusMatch[2];
+    }
+    return parsed.href;
+  } catch {
+    return String(raw || "");
+  }
+}
+
+function findStatusUrl(root) {
+  if (!root || !root.querySelectorAll) return null;
+  const links = Array.from(root.querySelectorAll("a[href]"));
+  const statusUrl = links
+    .map((anchor) => anchor.href)
+    .find((href) => /^https?:\\/\\/(x\\.com|twitter\\.com)\\/[^/]+\\/status\\/\\d+/.test(href));
+  return statusUrl ? normalizeUrl(statusUrl) : null;
+}
+
+function findUrlFromTarget(target) {
+  const element = target instanceof Element ? target : target && target.parentElement;
+  if (!element) return null;
+
+  const directLink = element.closest("a[href]");
+  if (directLink && directLink.href && /\\/status\\/\\d+/.test(directLink.href)) {
+    return normalizeUrl(directLink.href);
+  }
+
+  const articleUrl = findStatusUrl(element.closest("article"));
+  if (articleUrl) return articleUrl;
+
+  let node = element;
+  for (let i = 0; node && i < 8; i += 1, node = node.parentElement) {
+    const nearbyUrl = findStatusUrl(node);
+    if (nearbyUrl) return nearbyUrl;
+  }
+
+  if (/^https:\\/\\/(www\\.)?youtube\\.com\\/watch/.test(location.href) || /^https:\\/\\/youtu\\.be\\//.test(location.href)) {
+    return location.href;
+  }
+
+  return null;
+}
+
+document.addEventListener("contextmenu", (event) => {
+  lastRightClickUrl = findUrlFromTarget(event.target) || location.href;
+}, true);
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message && message.type === "get-right-click-url") {
+    sendResponse({ url: lastRightClickUrl });
+  }
+  return true;
+});
+'''
+(extension_dir / "content.js").write_text(content, encoding="utf-8")
+
 readme = """TG Video Relay Sender
 
 1. Open chrome://extensions
@@ -1065,7 +1152,7 @@ readme = """TG Video Relay Sender
 3. Load unpacked: select this chrome-tg-relay-extension folder
 4. Right-click an X/YouTube page or link and choose: 发送到 TG Relay 下载最高画质
 
-Tip: On the X home feed, if Chrome sends x.com/home instead of the post URL, open the post detail page first or right-click the post time/link.
+Tip: On the X home feed, right-click inside the post card or near the video/share area. The extension will try to find the real /status/ post URL automatically.
 """
 (extension_dir / "README.txt").write_text(readme, encoding="utf-8")
 
