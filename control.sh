@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v52"
+APP_VERSION="v53"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -968,78 +968,18 @@ run() {
 {
   "manifest_version": 3,
   "name": "TG Video Relay Sender",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Right-click a page or link and send it to Telegram Video Relay.",
   "permissions": ["contextMenus", "activeTab"],
   "host_permissions": ["${host_permission}"],
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [
-    {
-      "matches": ["https://x.com/*", "https://twitter.com/*", "https://www.youtube.com/*", "https://youtu.be/*"],
-      "js": ["content.js"],
-      "run_at": "document_idle"
-    }
-  ],
   "action": {
     "default_title": "Send current page to TG Relay"
   }
 }
 EOF_MANIFEST
-      cat > "${extension_dir}/content.js" <<'EOF_CONTENT'
-let lastRightClickUrl = null;
-
-function cleanStatusUrl(url) {
-  try {
-    const parsed = new URL(url);
-    const match = parsed.pathname.match(/^\/([^/]+)\/status\/(\d+)/);
-    if (match) {
-      return `${parsed.origin}/${match[1]}/status/${match[2]}`;
-    }
-    return parsed.href;
-  } catch {
-    return url;
-  }
-}
-
-function findUrlFromTarget(target) {
-  const element = target instanceof Element ? target : target && target.parentElement;
-  if (!element) return null;
-
-  const directLink = element.closest("a[href]");
-  if (directLink && directLink.href) {
-    return cleanStatusUrl(directLink.href);
-  }
-
-  const article = element.closest("article");
-  if (article) {
-    const links = Array.from(article.querySelectorAll("a[href]")).map((item) => item.href);
-    const statusLink = links.find((href) => /\/status\/\d+/.test(href));
-    if (statusLink) return cleanStatusUrl(statusLink);
-  }
-
-  if (/^https:\/\/(www\.)?youtube\.com\/watch/.test(location.href) || /^https:\/\/youtu\.be\//.test(location.href)) {
-    return location.href;
-  }
-
-  return null;
-}
-
-document.addEventListener(
-  "contextmenu",
-  (event) => {
-    lastRightClickUrl = findUrlFromTarget(event.target) || location.href;
-  },
-  true
-);
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message && message.type === "get-right-click-url") {
-    sendResponse({ url: lastRightClickUrl });
-  }
-});
-EOF_CONTENT
       cat > "${extension_dir}/background.js" <<EOF_BACKGROUND
 const SUBMIT_URL = ${submit_url_js};
 const SECRET = ${secret_js};
@@ -1050,7 +990,22 @@ function mark(text) {
   setTimeout(() => chrome.action.setBadgeText({ text: "" }), 3500);
 }
 
-async function submitUrl(targetUrl) {
+function cleanUrl(url) {
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    const statusMatch = parsed.pathname.match(/^\/([^/]+)\/status\/(\d+)/);
+    if ((parsed.hostname === "x.com" || parsed.hostname === "twitter.com") && statusMatch) {
+      return `${parsed.origin}/${statusMatch[1]}/status/${statusMatch[2]}`;
+    }
+    return parsed.href;
+  } catch {
+    return String(url || "");
+  }
+}
+
+async function submitUrl(rawUrl) {
+  const targetUrl = cleanUrl(rawUrl);
   if (!targetUrl || targetUrl.startsWith("chrome://") || targetUrl.startsWith("edge://")) {
     mark("ERR");
     console.warn("TG Relay: no valid page/link URL found");
@@ -1073,16 +1028,6 @@ async function submitUrl(targetUrl) {
   }
 }
 
-async function getContentScriptUrl(tab) {
-  if (!tab || !tab.id) return null;
-  try {
-    const response = await chrome.tabs.sendMessage(tab.id, { type: "get-right-click-url" });
-    return response && response.url ? response.url : null;
-  } catch {
-    return null;
-  }
-}
-
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
@@ -1093,9 +1038,8 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  const pageCardUrl = await getContentScriptUrl(tab);
-  const targetUrl = info.linkUrl || pageCardUrl || info.srcUrl || info.pageUrl || (tab && tab.url);
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  const targetUrl = info.linkUrl || info.srcUrl || info.pageUrl || (tab && tab.url);
   submitUrl(targetUrl);
 });
 
@@ -1103,6 +1047,16 @@ chrome.action.onClicked.addListener((tab) => {
   submitUrl(tab && tab.url);
 });
 EOF_BACKGROUND
+      cat > "${extension_dir}/README.txt" <<EOF_CHROME_README
+TG Video Relay Sender
+
+1. Open chrome://extensions
+2. Enable Developer mode
+3. Load unpacked: select this chrome-tg-relay-extension folder
+4. Right-click an X/YouTube page or link and choose: 发送到 TG Relay 下载最高画质
+
+Tip: On the X home feed, if Chrome sends x.com/home instead of the post URL, open the post detail page first or right-click the post time/link.
+EOF_CHROME_README
       (
         cd "${APP_DIR}"
         python3 -m zipfile -c "${extension_zip}" "chrome-tg-relay-extension"
@@ -1194,3 +1148,5 @@ EOF_BACKGROUND
 }
 
 run "${1:-menu}" "${2:-}"
+
+
