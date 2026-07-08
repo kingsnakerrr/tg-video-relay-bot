@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v53"
+APP_VERSION="v54"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -963,92 +963,103 @@ run() {
       extension_dir="${APP_DIR}/chrome-tg-relay-extension"
       extension_zip="${APP_DIR}/chrome-tg-relay-extension.zip"
       rm -rf "${extension_dir}" "${extension_zip}"
-      mkdir -p "${extension_dir}"
-      cat > "${extension_dir}/manifest.json" <<EOF_MANIFEST
-{
-  "manifest_version": 3,
-  "name": "TG Video Relay Sender",
-  "version": "1.0.3",
-  "description": "Right-click a page or link and send it to Telegram Video Relay.",
-  "permissions": ["contextMenus", "activeTab"],
-  "host_permissions": ["${host_permission}"],
-  "background": {
-    "service_worker": "background.js"
-  },
-  "action": {
-    "default_title": "Send current page to TG Relay"
-  }
-}
-EOF_MANIFEST
-      cat > "${extension_dir}/background.js" <<EOF_BACKGROUND
-const SUBMIT_URL = ${submit_url_js};
-const SECRET = ${secret_js};
+      export CHROME_EXTENSION_DIR="${extension_dir}"
+      export CHROME_EXTENSION_ZIP="${extension_zip}"
+      export CHROME_HOST_PERMISSION="${host_permission}"
+      python3 - <<'PY_CHROME_EXTENSION'
+import json
+import os
+import pathlib
+import zipfile
 
-function mark(text) {
-  chrome.action.setBadgeText({ text });
-  chrome.action.setBadgeBackgroundColor({ color: text === "OK" ? "#16a34a" : "#dc2626" });
-  setTimeout(() => chrome.action.setBadgeText({ text: "" }), 3500);
-}
+extension_dir = pathlib.Path(os.environ["CHROME_EXTENSION_DIR"])
+extension_zip = pathlib.Path(os.environ["CHROME_EXTENSION_ZIP"])
+submit_url = os.environ["SUBMIT_URL_FOR_CHROME"]
+secret = os.environ["SUBMIT_SECRET_FOR_CHROME"]
+host_permission = os.environ["CHROME_HOST_PERMISSION"]
 
-function cleanUrl(url) {
+extension_dir.mkdir(parents=True, exist_ok=True)
+manifest = {
+    "manifest_version": 3,
+    "name": "TG Video Relay Sender",
+    "version": "1.0.4",
+    "description": "Right-click a page or link and send it to Telegram Video Relay.",
+    "permissions": ["contextMenus", "activeTab"],
+    "host_permissions": [host_permission],
+    "background": {"service_worker": "background.js"},
+    "action": {"default_title": "Send current page to TG Relay"},
+}
+(extension_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+background = f'''const SUBMIT_URL = {json.dumps(submit_url)};
+const SECRET = {json.dumps(secret)};
+
+function mark(text) {{
+  chrome.action.setBadgeText({{ text }});
+  chrome.action.setBadgeBackgroundColor({{ color: text === "OK" ? "#16a34a" : "#dc2626" }});
+  setTimeout(() => chrome.action.setBadgeText({{ text: "" }}), 3500);
+}}
+
+function cleanUrl(url) {{
   if (!url) return "";
-  try {
+  try {{
     const parsed = new URL(url);
-    const statusMatch = parsed.pathname.match(/^\/([^/]+)\/status\/(\d+)/);
-    if ((parsed.hostname === "x.com" || parsed.hostname === "twitter.com") && statusMatch) {
-      return `${parsed.origin}/${statusMatch[1]}/status/${statusMatch[2]}`;
-    }
+    const statusMatch = parsed.pathname.match(/^\\/([^/]+)\\/status\\/(\\d+)/);
+    if ((parsed.hostname === "x.com" || parsed.hostname === "twitter.com") && statusMatch) {{
+      return parsed.origin + "/" + statusMatch[1] + "/status/" + statusMatch[2];
+    }}
     return parsed.href;
-  } catch {
+  }} catch {{
     return String(url || "");
-  }
-}
+  }}
+}}
 
-async function submitUrl(rawUrl) {
+async function submitUrl(rawUrl) {{
   const targetUrl = cleanUrl(rawUrl);
-  if (!targetUrl || targetUrl.startsWith("chrome://") || targetUrl.startsWith("edge://")) {
+  if (!targetUrl || targetUrl.startsWith("chrome://") || targetUrl.startsWith("edge://")) {{
     mark("ERR");
     console.warn("TG Relay: no valid page/link URL found");
     return;
-  }
-  try {
-    const body = new URLSearchParams({ secret: SECRET, url: targetUrl });
-    const response = await fetch(SUBMIT_URL, {
+  }}
+  try {{
+    const body = new URLSearchParams({{ secret: SECRET, url: targetUrl }});
+    const response = await fetch(SUBMIT_URL, {{
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: {{ "Content-Type": "application/x-www-form-urlencoded" }},
       body: body.toString()
-    });
+    }});
     const text = await response.text();
     if (!response.ok) throw new Error(text || response.statusText);
     mark("OK");
     console.log("TG Relay submitted:", targetUrl);
-  } catch (error) {
+  }} catch (error) {{
     mark("ERR");
     console.error("TG Relay failed:", error && error.message ? error.message : error);
-  }
-}
+  }}
+}}
 
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({
+chrome.runtime.onInstalled.addListener(() => {{
+  chrome.contextMenus.removeAll(() => {{
+    chrome.contextMenus.create({{
       id: "send-to-tg-relay",
       title: "发送到 TG Relay 下载最高画质",
       contexts: ["page", "link", "video", "image", "audio", "selection"]
-    });
-  });
-});
+    }});
+  }});
+}});
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+chrome.contextMenus.onClicked.addListener((info, tab) => {{
   const targetUrl = info.linkUrl || info.srcUrl || info.pageUrl || (tab && tab.url);
   submitUrl(targetUrl);
-});
+}});
 
-chrome.action.onClicked.addListener((tab) => {
+chrome.action.onClicked.addListener((tab) => {{
   submitUrl(tab && tab.url);
-});
-EOF_BACKGROUND
-      cat > "${extension_dir}/README.txt" <<EOF_CHROME_README
-TG Video Relay Sender
+}});
+'''
+(extension_dir / "background.js").write_text(background, encoding="utf-8")
+
+readme = """TG Video Relay Sender
 
 1. Open chrome://extensions
 2. Enable Developer mode
@@ -1056,11 +1067,16 @@ TG Video Relay Sender
 4. Right-click an X/YouTube page or link and choose: 发送到 TG Relay 下载最高画质
 
 Tip: On the X home feed, if Chrome sends x.com/home instead of the post URL, open the post detail page first or right-click the post time/link.
-EOF_CHROME_README
-      (
-        cd "${APP_DIR}"
-        python3 -m zipfile -c "${extension_zip}" "chrome-tg-relay-extension"
-      )
+"""
+(extension_dir / "README.txt").write_text(readme, encoding="utf-8")
+
+if extension_zip.exists():
+    extension_zip.unlink()
+with zipfile.ZipFile(extension_zip, "w", zipfile.ZIP_DEFLATED) as archive:
+    for path in extension_dir.rglob("*"):
+        if path.is_file():
+            archive.write(path, pathlib.Path(extension_dir.name) / path.relative_to(extension_dir))
+PY_CHROME_EXTENSION
       chmod 600 "${extension_dir}/background.js" "${extension_zip}" 2>/dev/null || true
       echo "Chrome right-click extension generated / Chrome 右键扩展已生成"
       echo "Submit API enabled / 提交接口启用: ${enabled:-unknown}"
@@ -1148,5 +1164,6 @@ EOF_CHROME_README
 }
 
 run "${1:-menu}" "${2:-}"
+
 
 
