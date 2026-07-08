@@ -32,6 +32,7 @@
 - v52：修复 Chrome 扩展 Service Worker 无效的问题，提交地址和密钥改用 JSON 安全转义写入后台脚本
 - v53：简化 Chrome 扩展为最小稳定右键版，移除 content script 和 tabs 消息通道，避免 Service Worker 再次失效
 - v54：Chrome 扩展文件改为 Python 生成，避免 Bash 展开 JavaScript 模板字符串导致 Service Worker 失效
+- v55：Chrome 扩展提交方式从 fetch 改为后台标签页 GET 提交，避开 CORS/fetch Failed to fetch 问题
 - `/id` 查看当前用户和聊天 ID
 - `/targets` 查看当前转发目标数量
 - `/status` 查看队列状态

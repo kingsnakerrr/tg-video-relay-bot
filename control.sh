@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v54"
+APP_VERSION="v55"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -982,9 +982,9 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
-    "permissions": ["contextMenus", "activeTab"],
+    "permissions": ["contextMenus", "activeTab", "tabs"],
     "host_permissions": [host_permission],
     "background": {"service_worker": "background.js"},
     "action": {"default_title": "Send current page to TG Relay"},
@@ -1022,14 +1022,13 @@ async function submitUrl(rawUrl) {{
     return;
   }}
   try {{
-    const body = new URLSearchParams({{ secret: SECRET, url: targetUrl }});
-    const response = await fetch(SUBMIT_URL, {{
-      method: "POST",
-      headers: {{ "Content-Type": "application/x-www-form-urlencoded" }},
-      body: body.toString()
-    }});
-    const text = await response.text();
-    if (!response.ok) throw new Error(text || response.statusText);
+    const submit = new URL(SUBMIT_URL);
+    submit.searchParams.set("secret", SECRET);
+    submit.searchParams.set("url", targetUrl);
+    const tab = await chrome.tabs.create({{ url: submit.href, active: false }});
+    if (tab && tab.id) {{
+      setTimeout(() => chrome.tabs.remove(tab.id).catch(() => {{}}), 5000);
+    }}
     mark("OK");
     console.log("TG Relay submitted:", targetUrl);
   }} catch (error) {{
