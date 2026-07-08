@@ -28,6 +28,7 @@
 - v48：安装时可选择安装目录，`x` 命令会自动绑定该目录；Telegram 发链接后 3 秒内可选清晰度，超时自动下载最高画质；默认下载最高可用，不再限制 1080p；Local Bot API 默认不自动创建 swap；新增 `x chrome` 显示电脑 Chrome 提交配置
 - v49：修复 VPS 目录里有本地 Git 改动时无法升级的问题；升级前会把本地改动备份到 `/root/tg-video-relay-backups`，再同步 GitHub
 - v50：`x chrome` 改为生成真正的 Chrome 右键扩展包，右键页面/链接即可带密钥提交到 VPS 下载最高画质
+- v51：修复 Chrome 扩展生成时 icon base64 报错的问题，改用扩展徽标显示 OK/ERR
 - `/id` 查看当前用户和聊天 ID
 - `/targets` 查看当前转发目标数量
 - `/status` 查看队列状态

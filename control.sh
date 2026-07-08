@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v50"
+APP_VERSION="v51"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -967,7 +967,7 @@ run() {
   "name": "TG Video Relay Sender",
   "version": "1.0.0",
   "description": "Right-click a page or link and send it to Telegram Video Relay.",
-  "permissions": ["contextMenus", "notifications", "activeTab"],
+  "permissions": ["contextMenus", "activeTab"],
   "host_permissions": ["${host_permission}"],
   "background": {
     "service_worker": "background.js"
@@ -1041,18 +1041,16 @@ EOF_CONTENT
 const SUBMIT_URL = ${submit_url@Q};
 const SECRET = ${secret@Q};
 
-function notify(title, message) {
-  chrome.notifications.create({
-    type: "basic",
-    iconUrl: "icon.png",
-    title,
-    message: String(message || "").slice(0, 240)
-  });
+function mark(text) {
+  chrome.action.setBadgeText({ text });
+  chrome.action.setBadgeBackgroundColor({ color: text === "OK" ? "#16a34a" : "#dc2626" });
+  setTimeout(() => chrome.action.setBadgeText({ text: "" }), 3500);
 }
 
 async function submitUrl(targetUrl) {
   if (!targetUrl || targetUrl.startsWith("chrome://") || targetUrl.startsWith("edge://")) {
-    notify("TG Relay", "No valid page/link URL found.");
+    mark("ERR");
+    console.warn("TG Relay: no valid page/link URL found");
     return;
   }
   try {
@@ -1064,9 +1062,11 @@ async function submitUrl(targetUrl) {
     });
     const text = await response.text();
     if (!response.ok) throw new Error(text || response.statusText);
-    notify("TG Relay submitted", targetUrl);
+    mark("OK");
+    console.log("TG Relay submitted:", targetUrl);
   } catch (error) {
-    notify("TG Relay failed", error && error.message ? error.message : error);
+    mark("ERR");
+    console.error("TG Relay failed:", error && error.message ? error.message : error);
   }
 }
 
@@ -1100,18 +1100,6 @@ chrome.action.onClicked.addListener((tab) => {
   submitUrl(tab && tab.url);
 });
 EOF_BACKGROUND
-      python3 - <<'PY_ICON' "${extension_dir}/icon.png"
-import base64
-import sys
-
-png = (
-    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAPklEQVR4nO3OMQ0AMAzAsP7/"
-    "p+2E4QYkCkU9SFYx7rnn7kYAAPwYhQAAABAAAEAAAQAAhAAAEEAAQAAhAAAEEAAQAB5AQ5h"
-    "A6IJ5pN6AAAAAElFTkSuQmCC"
-)
-with open(sys.argv[1], "wb") as f:
-    f.write(base64.b64decode(png))
-PY_ICON
       (
         cd "${APP_DIR}"
         python3 -m zipfile -c "${extension_zip}" "chrome-tg-relay-extension"
