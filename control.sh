@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v48"
+APP_VERSION="v49"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -164,6 +164,40 @@ set_env_value() {
   else
     printf '%s=%s\n' "${key}" "${value}" >> "${file}"
   fi
+}
+
+backup_and_reset_dirty_checkout() {
+  repo_dir="$1"
+  backup_dir="/root/tg-video-relay-backups"
+  dirty="$(git -C "${repo_dir}" status --porcelain 2>/dev/null || true)"
+  [ -n "${dirty}" ] || return 0
+  stamp="$(date +%Y%m%d%H%M%S)"
+  mkdir -p "${backup_dir}"
+  git -C "${repo_dir}" diff > "${backup_dir}/local-changes-${stamp}.patch" 2>/dev/null || true
+  git -C "${repo_dir}" diff --cached > "${backup_dir}/local-staged-${stamp}.patch" 2>/dev/null || true
+  git -C "${repo_dir}" status --porcelain > "${backup_dir}/local-status-${stamp}.txt" 2>/dev/null || true
+  echo "Local Git changes found. Backed them up to / 发现本地 Git 改动，已备份到:"
+  echo "  ${backup_dir}/local-changes-${stamp}.patch"
+  echo "  ${backup_dir}/local-status-${stamp}.txt"
+  echo "Resetting app code to match GitHub. / 正在把程序代码重置为 GitHub 版本。"
+  git -C "${repo_dir}" reset --hard HEAD
+}
+
+install_control_wrapper() {
+  [ -f "${APP_DIR}/control.sh" ] || return 0
+  chmod 755 "${APP_DIR}/control.sh"
+  cat > "${CONTROL_BIN}" <<EOF_CONTROL
+#!/usr/bin/env bash
+export APP_DIR="${APP_DIR}"
+exec "${APP_DIR}/control.sh" "\$@"
+EOF_CONTROL
+  chmod 755 "${CONTROL_BIN}"
+  cat > "${ALT_CONTROL_BIN}" <<EOF_CONTROL
+#!/usr/bin/env bash
+export APP_DIR="${APP_DIR}"
+exec "${APP_DIR}/control.sh" "\$@"
+EOF_CONTROL
+  chmod 755 "${ALT_CONTROL_BIN}"
 }
 
 is_local_mode_selected() {
@@ -938,27 +972,14 @@ run() {
         echo "${APP_DIR} 不是 Git 项目，请用 install.sh 重新安装。"
         exit 1
       fi
+      backup_and_reset_dirty_checkout "${APP_DIR}"
       git -C "${APP_DIR}" fetch origin "${BRANCH}"
       git -C "${APP_DIR}" checkout "${BRANCH}"
       git -C "${APP_DIR}" pull --ff-only origin "${BRANCH}"
       "${APP_DIR}/.venv/bin/python" -m pip install --upgrade -r "${APP_DIR}/requirements.txt"
       "${APP_DIR}/.venv/bin/python" -m pip install --upgrade yt-dlp
       ensure_env_defaults
-      if [ -f "${APP_DIR}/control.sh" ]; then
-        chmod 755 "${APP_DIR}/control.sh"
-        cat > "${CONTROL_BIN}" <<EOF_CONTROL
-#!/usr/bin/env bash
-export APP_DIR="${APP_DIR}"
-exec "${APP_DIR}/control.sh" "\$@"
-EOF_CONTROL
-        chmod 755 "${CONTROL_BIN}"
-        cat > "${ALT_CONTROL_BIN}" <<EOF_CONTROL
-#!/usr/bin/env bash
-export APP_DIR="${APP_DIR}"
-exec "${APP_DIR}/control.sh" "\$@"
-EOF_CONTROL
-        chmod 755 "${ALT_CONTROL_BIN}"
-      fi
+      install_control_wrapper
       systemctl restart "${APP_NAME}"
       systemctl status "${APP_NAME}" --no-pager
       ;;

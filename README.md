@@ -26,6 +26,7 @@
 - v46：修复 Debian trixie/Python 3.13 删除 `cgi` 标准库导致 HTTP submit API 启动失败的问题
 - v47：安装时可输入下载视频缓存目录，安装后可用 `x download-dir` 查看和修改
 - v48：安装时可选择安装目录，`x` 命令会自动绑定该目录；Telegram 发链接后 3 秒内可选清晰度，超时自动下载最高画质；默认下载最高可用，不再限制 1080p；Local Bot API 默认不自动创建 swap；新增 `x chrome` 显示电脑 Chrome 提交配置
+- v49：修复 VPS 目录里有本地 Git 改动时无法升级的问题；升级前会把本地改动备份到 `/root/tg-video-relay-backups`，再同步 GitHub
 - `/id` 查看当前用户和聊天 ID
 - `/targets` 查看当前转发目标数量
 - `/status` 查看队列状态

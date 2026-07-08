@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v48"
+APP_VERSION="v49"
 DEFAULT_APP_DIR="/opt/tg-video-relay-bot"
 APP_DIR_FROM_ENV="${APP_DIR:-}"
 APP_DIR="${APP_DIR:-${DEFAULT_APP_DIR}}"
@@ -12,7 +12,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-08.1"
+INSTALLER_VERSION="2026-07-08.2"
 DENO_INSTALL_STATUS="skipped"
 DEFAULT_DOWNLOAD_FORMAT="bv*+ba/best"
 OLD_1080P_DOWNLOAD_FORMAT="bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best"
@@ -89,6 +89,30 @@ ask_required() {
 
 generate_secret() {
   python -c 'import secrets; print(secrets.token_urlsafe(32))'
+}
+
+backup_and_reset_dirty_checkout() {
+  local repo_dir="$1"
+  local backup_dir="/root/tg-video-relay-backups"
+  local stamp=""
+  local dirty=""
+
+  [ -d "${repo_dir}/.git" ] || return 0
+  dirty="$(git -C "${repo_dir}" status --porcelain 2>/dev/null || true)"
+  [ -n "${dirty}" ] || return 0
+
+  stamp="$(date +%Y%m%d%H%M%S)"
+  mkdir -p "${backup_dir}"
+  git -C "${repo_dir}" diff > "${backup_dir}/local-changes-${stamp}.patch" 2>/dev/null || true
+  git -C "${repo_dir}" diff --cached > "${backup_dir}/local-staged-${stamp}.patch" 2>/dev/null || true
+  git -C "${repo_dir}" status --porcelain > "${backup_dir}/local-status-${stamp}.txt" 2>/dev/null || true
+
+  echo "Local Git changes found. Backed them up to / 发现本地 Git 改动，已备份到:"
+  echo "  ${backup_dir}/local-changes-${stamp}.patch"
+  echo "  ${backup_dir}/local-status-${stamp}.txt"
+  echo "Resetting app code to match GitHub. .env/cookies/downloads are not tracked and are kept."
+  echo "正在把程序代码重置为 GitHub 版本。.env、cookies、downloads 不受 Git 管理，会保留。"
+  git -C "${repo_dir}" reset --hard HEAD
 }
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -174,6 +198,7 @@ if [ -n "${SCRIPT_DIR}" ] && has_project_files "${SCRIPT_DIR}"; then
   fi
 elif [ -d "${APP_DIR}/.git" ]; then
   step "Updating existing GitHub checkout / 更新现有 GitHub 项目"
+  backup_and_reset_dirty_checkout "${APP_DIR}"
   retry_or_die "git fetch project" git -C "${APP_DIR}" fetch origin "${BRANCH}"
   retry_or_die "git checkout project branch" git -C "${APP_DIR}" checkout "${BRANCH}"
   retry_or_die "git pull project" git -C "${APP_DIR}" pull --ff-only origin "${BRANCH}"
