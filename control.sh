@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v57"
+APP_VERSION="v58"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -955,6 +955,9 @@ run() {
         */) submit_url="${submit_url}submit" ;;
         *) submit_url="${submit_url}/submit" ;;
       esac
+      case "${submit_url}" in
+        https://*:8787/*) submit_url="http://${submit_url#https://}" ;;
+      esac
       export SUBMIT_URL_FOR_CHROME="${submit_url}"
       export SUBMIT_SECRET_FOR_CHROME="${secret}"
       host_permission="$(python3 -c 'import os, urllib.parse; u=urllib.parse.urlsplit(os.environ["SUBMIT_URL_FOR_CHROME"]); print(f"{u.scheme}://{u.netloc}/*")')"
@@ -982,9 +985,9 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
-    "permissions": ["contextMenus", "activeTab", "tabs", "storage"],
+    "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead"],
     "host_permissions": [host_permission],
     "background": {"service_worker": "background.js"},
     "action": {"default_title": "Send current page to TG Relay"},
@@ -1070,6 +1073,15 @@ async function submitUrl(rawUrl) {{
     console.error("TG Relay failed:", error && error.message ? error.message : error);
   }}
 }}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {{
+  if (message && message.type === "submit-url" && message.url) {{
+    submitUrl(message.url);
+    sendResponse({{ ok: true }});
+    return true;
+  }}
+  return false;
+}});
 
 chrome.runtime.onInstalled.addListener(() => {{
   chrome.contextMenus.removeAll(() => {{
@@ -1176,6 +1188,40 @@ document.addEventListener("pointerdown", (event) => {
 
 document.addEventListener("contextmenu", rememberEvent, true);
 
+function looksLikeCopyLinkClick(event) {
+  const element = event.target instanceof Element ? event.target : event.target && event.target.parentElement;
+  if (!element) return false;
+  const text = (element.innerText || element.textContent || "").trim();
+  const menuItem = element.closest('[role="menuitem"], [data-testid]');
+  const menuText = menuItem ? (menuItem.innerText || menuItem.textContent || "").trim() : "";
+  return /复制链接|复制連結|Copy link|Copy Link/.test(text + " " + menuText);
+}
+
+function isSupportedShareUrl(url) {
+  return /^https?:\\/\\/(x\\.com|twitter\\.com)\\/[^/]+\\/status\\/\\d+/.test(url)
+    || /^https?:\\/\\/www\\.youtube\\.com\\/watch\\?/.test(url)
+    || /^https?:\\/\\/youtu\\.be\\//.test(url);
+}
+
+async function maybeSubmitCopiedLink() {
+  try {
+    const text = (await navigator.clipboard.readText()).trim();
+    const url = normalizeUrl(text);
+    if (!isSupportedShareUrl(url)) return;
+    const ok = window.confirm("发送到 TG Relay 下载最高画质？\\n\\n" + url);
+    if (!ok) return;
+    chrome.runtime.sendMessage({ type: "submit-url", url });
+  } catch (error) {
+    console.warn("TG Relay: cannot read copied link", error);
+  }
+}
+
+document.addEventListener("click", (event) => {
+  if (looksLikeCopyLinkClick(event)) {
+    setTimeout(maybeSubmitCopiedLink, 400);
+  }
+}, true);
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && message.type === "get-right-click-url") {
     sendResponse({ url: lastRightClickUrl });
@@ -1192,7 +1238,7 @@ readme = """TG Video Relay Sender
 3. Load unpacked: select this chrome-tg-relay-extension folder
 4. Right-click an X/YouTube page or link and choose: 发送到 TG Relay 下载最高画质
 
-Tip: On the X home feed, right-click inside the post card or near the video/share area. The extension records the nearby post card and submits the real /status/ URL instead of x.com/home.
+Tip: On X, the most reliable method is: click the X share button, click Copy link / 复制链接, then confirm the popup from this extension. It submits the real /status/ URL copied by X itself.
 """
 (extension_dir / "README.txt").write_text(readme, encoding="utf-8")
 
