@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v51"
+APP_VERSION="v52"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -956,7 +956,10 @@ run() {
         *) submit_url="${submit_url}/submit" ;;
       esac
       export SUBMIT_URL_FOR_CHROME="${submit_url}"
+      export SUBMIT_SECRET_FOR_CHROME="${secret}"
       host_permission="$(python3 -c 'import os, urllib.parse; u=urllib.parse.urlsplit(os.environ["SUBMIT_URL_FOR_CHROME"]); print(f"{u.scheme}://{u.netloc}/*")')"
+      submit_url_js="$(python3 -c 'import json, os; print(json.dumps(os.environ["SUBMIT_URL_FOR_CHROME"]))')"
+      secret_js="$(python3 -c 'import json, os; print(json.dumps(os.environ["SUBMIT_SECRET_FOR_CHROME"]))')"
       extension_dir="${APP_DIR}/chrome-tg-relay-extension"
       extension_zip="${APP_DIR}/chrome-tg-relay-extension.zip"
       rm -rf "${extension_dir}" "${extension_zip}"
@@ -965,7 +968,7 @@ run() {
 {
   "manifest_version": 3,
   "name": "TG Video Relay Sender",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Right-click a page or link and send it to Telegram Video Relay.",
   "permissions": ["contextMenus", "activeTab"],
   "host_permissions": ["${host_permission}"],
@@ -1038,8 +1041,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 EOF_CONTENT
       cat > "${extension_dir}/background.js" <<EOF_BACKGROUND
-const SUBMIT_URL = ${submit_url@Q};
-const SECRET = ${secret@Q};
+const SUBMIT_URL = ${submit_url_js};
+const SECRET = ${secret_js};
 
 function mark(text) {
   chrome.action.setBadgeText({ text });

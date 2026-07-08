@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v51"
+APP_VERSION="v52"
 DEFAULT_APP_DIR="/opt/tg-video-relay-bot"
 APP_DIR_FROM_ENV="${APP_DIR:-}"
 APP_DIR="${APP_DIR:-${DEFAULT_APP_DIR}}"
@@ -12,7 +12,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-09.1"
+INSTALLER_VERSION="2026-07-09.2"
 DENO_INSTALL_STATUS="skipped"
 DEFAULT_DOWNLOAD_FORMAT="bv*+ba/best"
 OLD_1080P_DOWNLOAD_FORMAT="bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best"

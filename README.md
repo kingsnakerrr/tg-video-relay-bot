@@ -29,6 +29,7 @@
 - v49：修复 VPS 目录里有本地 Git 改动时无法升级的问题；升级前会把本地改动备份到 `/root/tg-video-relay-backups`，再同步 GitHub
 - v50：`x chrome` 改为生成真正的 Chrome 右键扩展包，右键页面/链接即可带密钥提交到 VPS 下载最高画质
 - v51：修复 Chrome 扩展生成时 icon base64 报错的问题，改用扩展徽标显示 OK/ERR
+- v52：修复 Chrome 扩展 Service Worker 无效的问题，提交地址和密钥改用 JSON 安全转义写入后台脚本
 - `/id` 查看当前用户和聊天 ID
 - `/targets` 查看当前转发目标数量
 - `/status` 查看队列状态
