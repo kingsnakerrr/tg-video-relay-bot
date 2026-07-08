@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v49"
+APP_VERSION="v50"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -926,7 +926,7 @@ run() {
       echo "For iPhone outside your VPS, open TCP port ${port} or use HTTPS reverse proxy."
       echo "如果 iPhone 不在 VPS 本机，需要放行 TCP ${port} 或使用 HTTPS 反向代理。"
       ;;
-    chrome|browser-submit|chrome-submit)
+    chrome|browser-submit|chrome-submit|chrome-extension)
       need_root
       ensure_env_defaults
       port="$(env_value SUBMIT_API_PORT)"
@@ -935,30 +935,207 @@ run() {
       host_hint="$(hostname -I 2>/dev/null | awk '{print $1}')"
       [ -n "${port}" ] || port="8787"
       [ -n "${host_hint}" ] || host_hint="YOUR_VPS_IP_OR_DOMAIN"
-      submit_url="http://${host_hint}:${port}/submit"
-      echo "Chrome submit settings / Chrome 提交配置"
+      default_submit_url="http://${host_hint}:${port}/submit"
+      submit_url="${2:-}"
+      if [ -z "${submit_url}" ]; then
+        echo "Chrome right-click extension / Chrome 右键提交扩展"
+        echo
+        echo "Enter your public submit URL. Examples / 输入你的公网提交地址，例如:"
+        echo "  http://zouter.hk.222321.xyz:8787/submit"
+        echo "  https://zouter.hk.222321.xyz/submit"
+        read -r -p "Submit URL [${default_submit_url}]: " submit_url
+      fi
+      [ -n "${submit_url}" ] || submit_url="${default_submit_url}"
+      case "${submit_url}" in
+        http://*|https://*) ;;
+        *) submit_url="https://${submit_url}" ;;
+      esac
+      case "${submit_url}" in
+        */submit) ;;
+        */) submit_url="${submit_url}submit" ;;
+        *) submit_url="${submit_url}/submit" ;;
+      esac
+      export SUBMIT_URL_FOR_CHROME="${submit_url}"
+      host_permission="$(python3 -c 'import os, urllib.parse; u=urllib.parse.urlsplit(os.environ["SUBMIT_URL_FOR_CHROME"]); print(f"{u.scheme}://{u.netloc}/*")')"
+      extension_dir="${APP_DIR}/chrome-tg-relay-extension"
+      extension_zip="${APP_DIR}/chrome-tg-relay-extension.zip"
+      rm -rf "${extension_dir}" "${extension_zip}"
+      mkdir -p "${extension_dir}"
+      cat > "${extension_dir}/manifest.json" <<EOF_MANIFEST
+{
+  "manifest_version": 3,
+  "name": "TG Video Relay Sender",
+  "version": "1.0.0",
+  "description": "Right-click a page or link and send it to Telegram Video Relay.",
+  "permissions": ["contextMenus", "notifications", "activeTab"],
+  "host_permissions": ["${host_permission}"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*", "https://www.youtube.com/*", "https://youtu.be/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Send current page to TG Relay"
+  }
+}
+EOF_MANIFEST
+      cat > "${extension_dir}/content.js" <<'EOF_CONTENT'
+let lastRightClickUrl = null;
+
+function cleanStatusUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const match = parsed.pathname.match(/^\/([^/]+)\/status\/(\d+)/);
+    if (match) {
+      return `${parsed.origin}/${match[1]}/status/${match[2]}`;
+    }
+    return parsed.href;
+  } catch {
+    return url;
+  }
+}
+
+function findUrlFromTarget(target) {
+  const element = target instanceof Element ? target : target && target.parentElement;
+  if (!element) return null;
+
+  const directLink = element.closest("a[href]");
+  if (directLink && directLink.href) {
+    return cleanStatusUrl(directLink.href);
+  }
+
+  const article = element.closest("article");
+  if (article) {
+    const links = Array.from(article.querySelectorAll("a[href]")).map((item) => item.href);
+    const statusLink = links.find((href) => /\/status\/\d+/.test(href));
+    if (statusLink) return cleanStatusUrl(statusLink);
+  }
+
+  if (/^https:\/\/(www\.)?youtube\.com\/watch/.test(location.href) || /^https:\/\/youtu\.be\//.test(location.href)) {
+    return location.href;
+  }
+
+  return null;
+}
+
+document.addEventListener(
+  "contextmenu",
+  (event) => {
+    lastRightClickUrl = findUrlFromTarget(event.target) || location.href;
+  },
+  true
+);
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message && message.type === "get-right-click-url") {
+    sendResponse({ url: lastRightClickUrl });
+  }
+});
+EOF_CONTENT
+      cat > "${extension_dir}/background.js" <<EOF_BACKGROUND
+const SUBMIT_URL = ${submit_url@Q};
+const SECRET = ${secret@Q};
+
+function notify(title, message) {
+  chrome.notifications.create({
+    type: "basic",
+    iconUrl: "icon.png",
+    title,
+    message: String(message || "").slice(0, 240)
+  });
+}
+
+async function submitUrl(targetUrl) {
+  if (!targetUrl || targetUrl.startsWith("chrome://") || targetUrl.startsWith("edge://")) {
+    notify("TG Relay", "No valid page/link URL found.");
+    return;
+  }
+  try {
+    const body = new URLSearchParams({ secret: SECRET, url: targetUrl });
+    const response = await fetch(SUBMIT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString()
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(text || response.statusText);
+    notify("TG Relay submitted", targetUrl);
+  } catch (error) {
+    notify("TG Relay failed", error && error.message ? error.message : error);
+  }
+}
+
+async function getContentScriptUrl(tab) {
+  if (!tab || !tab.id) return null;
+  try {
+    const response = await chrome.tabs.sendMessage(tab.id, { type: "get-right-click-url" });
+    return response && response.url ? response.url : null;
+  } catch {
+    return null;
+  }
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: "send-to-tg-relay",
+      title: "发送到 TG Relay 下载最高画质",
+      contexts: ["page", "link", "video", "image", "audio", "selection"]
+    });
+  });
+});
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  const pageCardUrl = await getContentScriptUrl(tab);
+  const targetUrl = info.linkUrl || pageCardUrl || info.srcUrl || info.pageUrl || (tab && tab.url);
+  submitUrl(targetUrl);
+});
+
+chrome.action.onClicked.addListener((tab) => {
+  submitUrl(tab && tab.url);
+});
+EOF_BACKGROUND
+      python3 - <<'PY_ICON' "${extension_dir}/icon.png"
+import base64
+import sys
+
+png = (
+    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAPklEQVR4nO3OMQ0AMAzAsP7/"
+    "p+2E4QYkCkU9SFYx7rnn7kYAAPwYhQAAABAAAEAAAQAAhAAAEEAAQAAhAAAEEAAQAB5AQ5h"
+    "A6IJ5pN6AAAAAElFTkSuQmCC"
+)
+with open(sys.argv[1], "wb") as f:
+    f.write(base64.b64decode(png))
+PY_ICON
+      (
+        cd "${APP_DIR}"
+        python3 -m zipfile -c "${extension_zip}" "chrome-tg-relay-extension"
+      )
+      chmod 600 "${extension_dir}/background.js" "${extension_zip}" 2>/dev/null || true
+      echo "Chrome right-click extension generated / Chrome 右键扩展已生成"
       echo "Submit API enabled / 提交接口启用: ${enabled:-unknown}"
       echo
-      echo "Replace host with your domain if needed / 如果你用域名访问，把下面 IP 换成域名:"
       echo "  ${submit_url}"
       echo
-      echo "Chrome site-search URL template / Chrome 站点搜索 URL 模板:"
-      echo "  ${submit_url}?secret=${secret}&url=%s"
-      echo
-      echo "Bookmarklet / 书签按钮，打开视频页面后点一下即可提交当前页面:"
-      printf "  javascript:(()=>{fetch('%s',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'secret=%s&url='+encodeURIComponent(location.href)}).then(r=>r.text()).then(t=>alert(t)).catch(e=>alert(e))})()\n" "${submit_url}" "${secret}"
+      echo "Extension folder / 扩展目录:"
+      echo "  ${extension_dir}"
+      echo "Extension zip / 扩展压缩包:"
+      echo "  ${extension_zip}"
       echo
       echo "Chrome setup / Chrome 设置:"
-      echo "  1. Open chrome://settings/searchEngines / 打开 chrome://settings/searchEngines"
-      echo "  2. Add site search / 添加站点搜索"
-      echo "  3. Name: Send to TG Relay"
-      echo "  4. Shortcut: tg"
-      echo "  5. URL: paste the template above / URL 粘贴上面的模板"
-      echo "  6. Copy a YouTube/X URL, type 'tg ' in address bar, paste URL, press Enter."
-      echo "     复制 YouTube/X 链接后，地址栏输入 'tg '，粘贴链接，回车提交。"
-      echo
-      echo "For true link right-click extension files, ask me to generate the Chrome extension package."
-      echo "如果要真正右键链接直接提交，让我生成 Chrome 扩展包。"
+      echo "  1. Download the zip to your Windows PC and unzip it."
+      echo "     把 zip 下载到电脑并解压。"
+      echo "  2. Open chrome://extensions and enable Developer mode."
+      echo "     打开 chrome://extensions，开启开发者模式。"
+      echo "  3. Click Load unpacked and select the unzipped chrome-tg-relay-extension folder."
+      echo "     点“加载已解压的扩展程序”，选择解压后的 chrome-tg-relay-extension 文件夹。"
+      echo "  4. Right-click an X/YouTube page or link, choose: 发送到 TG Relay 下载最高画质"
+      echo "     以后在 X/YouTube 页面或链接上右键，点“发送到 TG Relay 下载最高画质”。"
       ;;
     env|config)
       need_root

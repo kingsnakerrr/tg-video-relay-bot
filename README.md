@@ -27,6 +27,7 @@
 - v47：安装时可输入下载视频缓存目录，安装后可用 `x download-dir` 查看和修改
 - v48：安装时可选择安装目录，`x` 命令会自动绑定该目录；Telegram 发链接后 3 秒内可选清晰度，超时自动下载最高画质；默认下载最高可用，不再限制 1080p；Local Bot API 默认不自动创建 swap；新增 `x chrome` 显示电脑 Chrome 提交配置
 - v49：修复 VPS 目录里有本地 Git 改动时无法升级的问题；升级前会把本地改动备份到 `/root/tg-video-relay-backups`，再同步 GitHub
+- v50：`x chrome` 改为生成真正的 Chrome 右键扩展包，右键页面/链接即可带密钥提交到 VPS 下载最高画质
 - `/id` 查看当前用户和聊天 ID
 - `/targets` 查看当前转发目标数量
 - `/status` 查看队列状态
@@ -90,15 +91,29 @@ x download-dir
 DOWNLOAD_DIR=/data/opt/tg-video-relay-bot/downloads
 ```
 
-### 电脑 Chrome 提交链接
+### 电脑 Chrome 右键提交
 
 安装完成后执行：
 
 ```bash
-x chrome
+x chrome http://zouter.hk.222321.xyz:8787/submit
 ```
 
-它会显示 Submit API 地址、secret、Chrome 站点搜索 URL 模板和书签按钮代码。最简单用法是在 Chrome 地址栏配置一个 `tg` 快捷搜索，以后复制 X/YouTube 链接后，地址栏输入 `tg ` 再粘贴链接回车，就会直接提交到 VPS 下载最高画质。
+如果你用了 HTTPS 反代，也可以：
+
+```bash
+x chrome https://zouter.hk.222321.xyz/submit
+```
+
+命令会生成：
+
+```text
+/data/opt/tg-video-relay-bot/chrome-tg-relay-extension.zip
+```
+
+把这个 zip 下载到电脑解压，Chrome 打开 `chrome://extensions`，开启开发者模式，点“加载已解压的扩展程序”，选择解压后的 `chrome-tg-relay-extension` 文件夹。以后在 X/YouTube 页面或链接上右键，选择“发送到 TG Relay 下载最高画质”即可。
+
+注意：扩展包里包含你的 `SUBMIT_API_SECRET`，不要上传到公开仓库。
 
 ### 安装失败重试和低内存 Local Bot API
 

@@ -31,7 +31,7 @@ x fix-env     # 补齐缺少的 .env 默认配置
 x cookies     # 立即同步 cookies.txt
 x download-dir # 查看或修改下载视频缓存目录
 x shortcut    # 查看 iPhone 快捷指令配置
-x chrome      # 查看电脑 Chrome 提交配置
+x chrome http://你的域名:8787/submit # 生成电脑 Chrome 右键提交扩展
 x env         # 修改 .env 配置
 x update      # 更新代码并重启
 x reinstall   # 重新执行安装
@@ -39,7 +39,7 @@ x uninstall   # 卸载服务，保留 /opt/tg-video-relay-bot 和 .env
 x purge       # 彻底删除服务和 /opt/tg-video-relay-bot
 ```
 
-Telegram 里直接发链接会先显示可选清晰度按钮，3 秒内不选会自动下载最高画质。iPhone 快捷指令和 Chrome 提交不会弹按钮，会直接按默认最高可用下载。
+Telegram 里直接发链接会先显示可选清晰度按钮，3 秒内不选会自动下载最高画质。iPhone 快捷指令和 Chrome 右键扩展提交不会弹按钮，会直接按默认最高可用下载。
 
 关闭 Telegram 清晰度选择：
 
