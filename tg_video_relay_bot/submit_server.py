@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from .config import Settings
+from .downloader import DownloadError, probe_resolutions
 from .jobs import JobQueue, VideoJob
 from .links import extract_urls
 
@@ -19,6 +20,32 @@ MAX_BODY_BYTES = 64 * 1024
 
 class SubmitServerError(RuntimeError):
     pass
+
+
+def _is_youtube_url(url: str) -> bool:
+    lowered = url.lower()
+    return "youtube.com" in lowered or "youtu.be" in lowered
+
+
+def _highest_download_choice(url: str, settings: Settings) -> tuple[str | None, str | None]:
+    if not _is_youtube_url(url):
+        return None, None
+    try:
+        probe = probe_resolutions(url, settings)
+    except DownloadError as exc:
+        logging.warning("submit-api YouTube format probe failed: url=%s error=%s", url, exc)
+        return None, None
+    if not probe.choices:
+        logging.warning("submit-api YouTube format probe returned no choices: url=%s", url)
+        return None, None
+    choice = probe.choices[0]
+    logging.info(
+        "submit-api selected highest YouTube format: url=%s label=%s selector=%s",
+        url,
+        choice.label,
+        choice.format_selector,
+    )
+    return choice.format_selector, choice.label
 
 
 def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, Any]) -> None:
@@ -148,6 +175,7 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
             positions: list[int] = []
             for url in urls:
                 logging.info("submit-api queued url: %s", url)
+                download_format, resolution_label = _highest_download_choice(url, settings)
                 positions.append(
                     job_queue.enqueue(
                         VideoJob(
@@ -155,6 +183,8 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
                             source_message_id=None,
                             source_user_id=None,
                             url=url,
+                            download_format=download_format,
+                            resolution_label=resolution_label,
                         )
                     )
                 )
