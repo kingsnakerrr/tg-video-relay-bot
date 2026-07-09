@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v63: Chrome extension supports YouTube Shorts URLs such as https://youtube.com/shorts/VIDEO_ID.
+
 把 X/Twitter、TikTok、抖音、YouTube 等公开视频链接转发给 Telegram 机器人，机器人会在 VPS 上下载视频，然后发送到配置好的多个频道或群组。任务结束后，本地视频会自动清理。
 
 请只下载和转发你拥有权利或已获授权的视频，并遵守平台条款。这个项目不绕过 DRM、付费墙或私密内容访问限制。

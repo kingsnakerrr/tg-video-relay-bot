@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v62"
+APP_VERSION="v63"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -986,7 +986,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -997,6 +997,7 @@ manifest = {
             "matches": [
                 "https://x.com/*",
                 "https://twitter.com/*",
+                "https://youtube.com/*",
                 "https://www.youtube.com/*",
                 "https://youtu.be/*"
             ],
@@ -1095,7 +1096,8 @@ async function getClipboardOrPromptUrl(tab) {{
         }}
         function supported(url) {{
           return /^https?:\\/\\/(x\\.com|twitter\\.com)\\/[^/]+\\/status\\/\\d+/.test(url)
-            || /^https?:\\/\\/www\\.youtube\\.com\\/watch\\?/.test(url)
+            || /^https?:\\/\\/(www\\.)?youtube\\.com\\/watch\\?/.test(url)
+            || /^https?:\\/\\/(www\\.)?youtube\\.com\\/shorts\\//.test(url)
             || /^https?:\\/\\/youtu\\.be\\//.test(url)
             || /^https?:\\/\\/(www\\.)?tiktok\\.com\\//.test(url)
             || /^https?:\\/\\/v\\.douyin\\.com\\//.test(url);
@@ -1234,7 +1236,9 @@ function findUrlFromTarget(target) {
     if (nearbyUrl) return nearbyUrl;
   }
 
-  if (/^https:\\/\\/(www\\.)?youtube\\.com\\/watch/.test(location.href) || /^https:\\/\\/youtu\\.be\\//.test(location.href)) {
+  if (/^https:\\/\\/(www\\.)?youtube\\.com\\/watch/.test(location.href)
+    || /^https:\\/\\/(www\\.)?youtube\\.com\\/shorts\\//.test(location.href)
+    || /^https:\\/\\/youtu\\.be\\//.test(location.href)) {
     return location.href;
   }
 
@@ -1270,7 +1274,8 @@ function looksLikeCopyLinkClick(event) {
 
 function isSupportedShareUrl(url) {
   return /^https?:\\/\\/(x\\.com|twitter\\.com)\\/[^/]+\\/status\\/\\d+/.test(url)
-    || /^https?:\\/\\/www\\.youtube\\.com\\/watch\\?/.test(url)
+    || /^https?:\\/\\/(www\\.)?youtube\\.com\\/watch\\?/.test(url)
+    || /^https?:\\/\\/(www\\.)?youtube\\.com\\/shorts\\//.test(url)
     || /^https?:\\/\\/youtu\\.be\\//.test(url);
 }
 
@@ -1418,5 +1423,3 @@ PY_CHROME_EXTENSION
 }
 
 run "${1:-menu}" "${2:-}"
-
-
