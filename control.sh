@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v65"
+APP_VERSION="v66"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -986,7 +986,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.2.1",
+    "version": "1.2.2",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1150,7 +1150,7 @@ async function getUrlFromTab(tab, promptIfMissing = false) {{
 chrome.runtime.onInstalled.addListener(async () => {{
   await setEnabled(await isEnabled());
   chrome.contextMenus.removeAll(() => {{
-    chrome.contextMenus.create({{ id: "send-to-tg-relay", title: "Send copied X/YouTube video to TG Relay", contexts: ["action"] }});
+    chrome.contextMenus.create({{ id: "send-to-tg-relay", title: "Send copied X/YouTube video to TG Relay", contexts: ["page", "link", "video", "image", "audio", "selection", "action"] }});
     chrome.contextMenus.create({{ id: "tg-relay-enable", title: "TG Relay: enable", contexts: ["action"] }});
     chrome.contextMenus.create({{ id: "tg-relay-disable", title: "TG Relay: disable", contexts: ["action"] }});
   }});
@@ -1234,6 +1234,13 @@ async function maybePromptCopiedUrl() {
 
 document.addEventListener("copy", () => { setTimeout(maybePromptCopiedUrl, 350); }, true);
 document.addEventListener("focus", () => { setTimeout(maybePromptCopiedUrl, 350); }, true);
+document.addEventListener("click", () => { setTimeout(maybePromptCopiedUrl, 450); }, true);
+document.addEventListener("mouseup", () => { setTimeout(maybePromptCopiedUrl, 450); }, true);
+document.addEventListener("keyup", (event) => {
+  if ((event.ctrlKey || event.metaKey) && String(event.key || "").toLowerCase() === "c") {
+    setTimeout(maybePromptCopiedUrl, 350);
+  }
+}, true);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && (message.type === "get-clipboard-url" || message.type === "get-clipboard-or-prompt-url")) {

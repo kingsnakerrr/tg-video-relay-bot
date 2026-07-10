@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v66: Page right-click send menu is restored; enable/disable remains only on the extension icon right-click. Copy detection also checks click/mouseup/keyboard copy events.
+
 Update v65: Chrome extension menus now appear only when right-clicking the extension icon. Left-click submits the copied URL; icon right-click has enable/disable.
 
 Update v64: Chrome extension prompts only for copied X/YouTube video URLs, ignores other copied text, supports enable/disable menu, and left-click submits copied URL.
