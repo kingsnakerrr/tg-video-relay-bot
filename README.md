@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v69: Chrome copy popup now asks once per copy action, so copying the same URL again after cancel will prompt again.
+
 Update v68: Chrome copy popup now stops after one confirm/cancel per copied URL, preventing repeated submit prompts.
 
 Update v67: Chrome extension watches the clipboard for several seconds after copy/click so X/YouTube copied links can trigger the confirm popup more reliably.
