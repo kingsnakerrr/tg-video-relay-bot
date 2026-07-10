@@ -1,5 +1,9 @@
 # Telegram Video Relay Bot
 
+Update v65: Chrome extension menus now appear only when right-clicking the extension icon. Left-click submits the copied URL; icon right-click has enable/disable.
+
+Update v64: Chrome extension prompts only for copied X/YouTube video URLs, ignores other copied text, supports enable/disable menu, and left-click submits copied URL.
+
 Update v63: Chrome extension supports YouTube Shorts URLs such as https://youtube.com/shorts/VIDEO_ID.
 
 把 X/Twitter、TikTok、抖音、YouTube 等公开视频链接转发给 Telegram 机器人，机器人会在 VPS 上下载视频，然后发送到配置好的多个频道或群组。任务结束后，本地视频会自动清理。

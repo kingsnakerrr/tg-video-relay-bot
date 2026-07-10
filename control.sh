@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v63"
+APP_VERSION="v65"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -986,7 +986,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.1.2",
+    "version": "1.2.1",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1009,24 +1009,21 @@ manifest = {
 }
 (extension_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
-background = f'''const SUBMIT_URL = {json.dumps(submit_url)};
+background = rf'''const SUBMIT_URL = {json.dumps(submit_url)};
 const SECRET = {json.dumps(secret)};
+const ENABLED_KEY = "tgRelayEnabled";
 
 function submitEndpoint() {{
-  try {{
-    const endpoint = new URL(SUBMIT_URL);
-    if (endpoint.protocol === "https:" && endpoint.port === "8787") {{
-      endpoint.protocol = "http:";
-    }}
-    return endpoint;
-  }} catch {{
-    return new URL(SUBMIT_URL);
+  const endpoint = new URL(SUBMIT_URL);
+  if (endpoint.protocol === "https:" && endpoint.port === "8787") {{
+    endpoint.protocol = "http:";
   }}
+  return endpoint;
 }}
 
 function mark(text) {{
   chrome.action.setBadgeText({{ text }});
-  chrome.action.setBadgeBackgroundColor({{ color: text === "OK" ? "#16a34a" : "#dc2626" }});
+  chrome.action.setBadgeBackgroundColor({{ color: text === "OK" ? "#16a34a" : text === "OFF" ? "#6b7280" : "#dc2626" }});
   setTimeout(() => chrome.action.setBadgeText({{ text: "" }}), 3500);
 }}
 
@@ -1034,7 +1031,7 @@ function cleanUrl(url) {{
   if (!url) return "";
   try {{
     const parsed = new URL(url);
-    const statusMatch = parsed.pathname.match(/^\\/([^/]+)\\/status\\/(\\d+)/);
+    const statusMatch = parsed.pathname.match(/^\/([^/]+)\/status\/(\d+)/);
     if ((parsed.hostname === "x.com" || parsed.hostname === "twitter.com") && statusMatch) {{
       return parsed.origin + "/" + statusMatch[1] + "/status/" + statusMatch[2];
     }}
@@ -1044,96 +1041,49 @@ function cleanUrl(url) {{
   }}
 }}
 
-function isBadFallbackUrl(url) {{
+function isSupportedVideoUrl(url) {{
+  if (!url) return false;
   try {{
     const parsed = new URL(url);
-    return (parsed.hostname === "x.com" || parsed.hostname === "twitter.com") &&
-      (parsed.pathname === "/" || parsed.pathname === "/home");
-  }} catch {{
-    return false;
-  }}
+    const host = parsed.hostname.replace(/^www\./, "");
+    if ((host === "x.com" || host === "twitter.com") && /^\/[^/]+\/status\/\d+/.test(parsed.pathname)) return true;
+    if (host === "youtube.com" && (parsed.pathname === "/watch" || parsed.pathname.startsWith("/shorts/"))) return true;
+    if (host === "youtu.be" && parsed.pathname.length > 1) return true;
+  }} catch {{}}
+  return false;
 }}
 
-async function getContentScriptUrl(tab) {{
-  let messageUrl = "";
-  try {{
-    if (tab && tab.id) {{
-      const response = await chrome.tabs.sendMessage(tab.id, {{ type: "get-submit-url" }});
-      messageUrl = response && response.url ? response.url : "";
-    }}
-  }} catch (error) {{
-    messageUrl = "";
-  }}
-  if (messageUrl && !isBadFallbackUrl(messageUrl)) return messageUrl;
-  try {{
-    const stored = await chrome.storage.session.get(["tgRelayLastRightClickUrl", "tgRelayLastRightClickAt"]);
-    const ageMs = Date.now() - Number(stored.tgRelayLastRightClickAt || 0);
-    if (stored.tgRelayLastRightClickUrl && ageMs < 30000 && !isBadFallbackUrl(stored.tgRelayLastRightClickUrl)) {{
-      return stored.tgRelayLastRightClickUrl;
-    }}
-  }} catch (error) {{}}
-  return "";
+async function isEnabled() {{
+  const stored = await chrome.storage.local.get({{ [ENABLED_KEY]: true }});
+  return stored[ENABLED_KEY] !== false;
 }}
 
-async function getClipboardOrPromptUrl(tab) {{
-  if (!tab || !tab.id) return "";
-  try {{
-    const results = await chrome.scripting.executeScript({{
-      target: {{ tabId: tab.id }},
-      func: async () => {{
-        function normalize(raw) {{
-          if (!raw) return "";
-          try {{
-            const parsed = new URL(raw, location.href);
-            const statusMatch = parsed.pathname.match(/^\\/([^/]+)\\/status\\/(\\d+)/);
-            if ((parsed.hostname === "x.com" || parsed.hostname === "twitter.com") && statusMatch) {{
-              return parsed.origin + "/" + statusMatch[1] + "/status/" + statusMatch[2];
-            }}
-            return parsed.href;
-          }} catch {{
-            return String(raw || "");
-          }}
-        }}
-        function supported(url) {{
-          return /^https?:\\/\\/(x\\.com|twitter\\.com)\\/[^/]+\\/status\\/\\d+/.test(url)
-            || /^https?:\\/\\/(www\\.)?youtube\\.com\\/watch\\?/.test(url)
-            || /^https?:\\/\\/(www\\.)?youtube\\.com\\/shorts\\//.test(url)
-            || /^https?:\\/\\/youtu\\.be\\//.test(url)
-            || /^https?:\\/\\/(www\\.)?tiktok\\.com\\//.test(url)
-            || /^https?:\\/\\/v\\.douyin\\.com\\//.test(url);
-        }}
-        try {{
-          const text = (await navigator.clipboard.readText()).trim();
-          const url = normalize(text);
-          if (supported(url)) return url;
-        }} catch (error) {{}}
-        const pasted = window.prompt("没有读到剪贴板里的真实链接，请粘贴 X/YouTube/TikTok/Douyin 链接：", "");
-        const url = normalize(pasted || "");
-        return supported(url) ? url : "";
-      }}
-    }});
-    return results && results[0] && results[0].result ? results[0].result : "";
-  }} catch (error) {{
-    return "";
+async function setEnabled(enabled) {{
+  await chrome.storage.local.set({{ [ENABLED_KEY]: enabled }});
+  if (enabled) {{
+    chrome.action.setBadgeText({{ text: "" }});
+  }} else {{
+    chrome.action.setBadgeText({{ text: "OFF" }});
+    chrome.action.setBadgeBackgroundColor({{ color: "#6b7280" }});
   }}
 }}
 
 async function submitUrl(rawUrl) {{
+  if (!(await isEnabled())) {{
+    mark("OFF");
+    return;
+  }}
   const targetUrl = cleanUrl(rawUrl);
-  if (!targetUrl || targetUrl.startsWith("chrome://") || targetUrl.startsWith("edge://") || isBadFallbackUrl(targetUrl)) {{
+  if (!isSupportedVideoUrl(targetUrl) || targetUrl.startsWith("chrome://") || targetUrl.startsWith("edge://")) {{
     mark("ERR");
-    console.warn("TG Relay: no valid page/link URL found");
+    console.warn("TG Relay: no supported X/YouTube video URL found", targetUrl);
     return;
   }}
   try {{
     const submit = submitEndpoint();
     submit.searchParams.set("secret", SECRET);
     submit.searchParams.set("url", targetUrl);
-    const response = await fetch(submit.href, {{
-      method: "GET",
-      cache: "no-store",
-      credentials: "omit"
-    }});
+    const response = await fetch(submit.href, {{ method: "GET", cache: "no-store", credentials: "omit" }});
     if (!response.ok) {{
       const text = await response.text().catch(() => "");
       throw new Error(text || response.statusText || String(response.status));
@@ -1146,174 +1096,159 @@ async function submitUrl(rawUrl) {{
   }}
 }}
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {{
-  if (message && message.type === "submit-url" && message.url) {{
-    submitUrl(message.url);
-    sendResponse({{ ok: true }});
-    return true;
-  }}
-  return false;
-}});
-
-chrome.runtime.onInstalled.addListener(() => {{
-  chrome.contextMenus.removeAll(() => {{
-    chrome.contextMenus.create({{
-      id: "send-to-tg-relay",
-      title: "发送到 TG Relay 下载最高画质",
-      contexts: ["page", "link", "video", "image", "audio", "selection"]
+async function getUrlFromTab(tab, promptIfMissing = false) {{
+  if (!tab || !tab.id) return "";
+  try {{
+    const response = await chrome.tabs.sendMessage(tab.id, {{ type: promptIfMissing ? "get-clipboard-or-prompt-url" : "get-clipboard-url" }});
+    if (response && response.url) return response.url;
+  }} catch (error) {{}}
+  try {{
+    const results = await chrome.scripting.executeScript({{
+      target: {{ tabId: tab.id }},
+      func: (promptIfMissingArg) => {{
+        function normalize(raw) {{
+          if (!raw) return "";
+          try {{
+            const parsed = new URL(raw, location.href);
+            const statusMatch = parsed.pathname.match(/^\/([^/]+)\/status\/(\d+)/);
+            if ((parsed.hostname === "x.com" || parsed.hostname === "twitter.com") && statusMatch) {{
+              return parsed.origin + "/" + statusMatch[1] + "/status/" + statusMatch[2];
+            }}
+            return parsed.href;
+          }} catch {{ return String(raw || ""); }}
+        }}
+        function supported(url) {{
+          try {{
+            const parsed = new URL(url);
+            const host = parsed.hostname.replace(/^www\./, "");
+            if ((host === "x.com" || host === "twitter.com") && /^\/[^/]+\/status\/\d+/.test(parsed.pathname)) return true;
+            if (host === "youtube.com" && (parsed.pathname === "/watch" || parsed.pathname.startsWith("/shorts/"))) return true;
+            if (host === "youtu.be" && parsed.pathname.length > 1) return true;
+          }} catch {{}}
+          return false;
+        }}
+        return navigator.clipboard.readText().then((text) => {{
+          const url = normalize(String(text || "").trim());
+          if (supported(url)) return url;
+          if (!promptIfMissingArg) return "";
+          const pasted = window.prompt("Paste an X or YouTube video URL:", "");
+          const pastedUrl = normalize(pasted || "");
+          return supported(pastedUrl) ? pastedUrl : "";
+        }}).catch(() => {{
+          if (!promptIfMissingArg) return "";
+          const pasted = window.prompt("Paste an X or YouTube video URL:", "");
+          const pastedUrl = normalize(pasted || "");
+          return supported(pastedUrl) ? pastedUrl : "";
+        }});
+      }},
+      args: [promptIfMissing]
     }});
+    return results && results[0] && results[0].result ? results[0].result : "";
+  }} catch (error) {{ return ""; }}
+}}
+
+chrome.runtime.onInstalled.addListener(async () => {{
+  await setEnabled(await isEnabled());
+  chrome.contextMenus.removeAll(() => {{
+    chrome.contextMenus.create({{ id: "send-to-tg-relay", title: "Send copied X/YouTube video to TG Relay", contexts: ["action"] }});
+    chrome.contextMenus.create({{ id: "tg-relay-enable", title: "TG Relay: enable", contexts: ["action"] }});
+    chrome.contextMenus.create({{ id: "tg-relay-disable", title: "TG Relay: disable", contexts: ["action"] }});
   }});
 }});
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {{
-  const pageCardUrl = await getContentScriptUrl(tab);
-  const clipboardOrPromptUrl = info.linkUrl ? "" : await getClipboardOrPromptUrl(tab);
-  const targetUrl = info.linkUrl || clipboardOrPromptUrl || pageCardUrl || info.srcUrl || "";
+  if (info.menuItemId === "tg-relay-enable") {{ await setEnabled(true); mark("ON"); return; }}
+  if (info.menuItemId === "tg-relay-disable") {{ await setEnabled(false); return; }}
+  if (info.menuItemId !== "send-to-tg-relay") return;
+  const copiedUrl = await getUrlFromTab(tab, true);
+  const targetUrl = copiedUrl || info.linkUrl || info.srcUrl || "";
   submitUrl(targetUrl);
 }});
 
-chrome.action.onClicked.addListener((tab) => {{
-  submitUrl(tab && tab.url);
+chrome.action.onClicked.addListener(async (tab) => {{
+  const copiedUrl = await getUrlFromTab(tab, true);
+  submitUrl(copiedUrl);
+}});
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {{
+  if (message && message.type === "submit-url" && message.url) {{ submitUrl(message.url); sendResponse({{ ok: true }}); return true; }}
+  if (message && message.type === "set-enabled") {{ setEnabled(Boolean(message.enabled)).then(() => sendResponse({{ ok: true }})); return true; }}
+  if (message && message.type === "get-enabled") {{ isEnabled().then((enabled) => sendResponse({{ enabled }})); return true; }}
+  return false;
 }});
 '''
 (extension_dir / "background.js").write_text(background, encoding="utf-8")
 
-content = '''let lastRightClickUrl = null;
+content = r'''let lastClipboardUrl = "";
+let lastPromptAt = 0;
 
 function normalizeUrl(raw) {
   if (!raw) return "";
   try {
     const parsed = new URL(raw, location.href);
-    const statusMatch = parsed.pathname.match(/^\\/([^/]+)\\/status\\/(\\d+)/);
+    const statusMatch = parsed.pathname.match(/^\/([^/]+)\/status\/(\d+)/);
     if ((parsed.hostname === "x.com" || parsed.hostname === "twitter.com") && statusMatch) {
       return parsed.origin + "/" + statusMatch[1] + "/status/" + statusMatch[2];
     }
     return parsed.href;
-  } catch {
-    return String(raw || "");
-  }
+  } catch { return String(raw || ""); }
 }
 
-function findStatusUrl(root) {
-  if (!root) return null;
-  const links = [];
-  if (root.matches && root.matches("a[href]")) links.push(root);
-  if (root.querySelectorAll) links.push(...Array.from(root.querySelectorAll("a[href]")));
-  const statusUrl = links
-    .map((anchor) => anchor.href)
-    .find((href) => /^https?:\\/\\/(x\\.com|twitter\\.com)\\/[^/]+\\/status\\/\\d+/.test(href));
-  return statusUrl ? normalizeUrl(statusUrl) : null;
-}
-
-function findUrlFromTarget(target) {
-  const element = target instanceof Element ? target : target && target.parentElement;
-  if (!element) return null;
-
-  const directLink = element.closest("a[href]");
-  if (directLink && directLink.href && /\\/status\\/\\d+/.test(directLink.href)) {
-    return normalizeUrl(directLink.href);
-  }
-
-  const articleUrl = findStatusUrl(element.closest("article"));
-  if (articleUrl) return articleUrl;
-
-  const tweetUrl = findStatusUrl(element.closest('[data-testid="tweet"]'));
-  if (tweetUrl) return tweetUrl;
-
-  if (document.elementsFromPoint) {
-    const pointElements = document.elementsFromPoint(window.tgRelayLastClientX || 0, window.tgRelayLastClientY || 0);
-    for (const pointElement of pointElements) {
-      const pointArticleUrl = findStatusUrl(pointElement.closest && pointElement.closest("article"));
-      if (pointArticleUrl) return pointArticleUrl;
-      const pointTweetUrl = findStatusUrl(pointElement.closest && pointElement.closest('[data-testid="tweet"]'));
-      if (pointTweetUrl) return pointTweetUrl;
-    }
-  }
-
-  let node = element;
-  for (let i = 0; node && i < 14; i += 1, node = node.parentElement) {
-    const nearbyUrl = findStatusUrl(node);
-    if (nearbyUrl) return nearbyUrl;
-  }
-
-  if (/^https:\\/\\/(www\\.)?youtube\\.com\\/watch/.test(location.href)
-    || /^https:\\/\\/(www\\.)?youtube\\.com\\/shorts\\//.test(location.href)
-    || /^https:\\/\\/youtu\\.be\\//.test(location.href)) {
-    return location.href;
-  }
-
-  return null;
-}
-
-function rememberEvent(event) {
-  window.tgRelayLastClientX = event.clientX;
-  window.tgRelayLastClientY = event.clientY;
-  lastRightClickUrl = findUrlFromTarget(event.target) || "";
+function isSupportedVideoUrl(url) {
   try {
-    chrome.storage.session.set({
-      tgRelayLastRightClickUrl: lastRightClickUrl,
-      tgRelayLastRightClickAt: Date.now()
-    });
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "");
+    if ((host === "x.com" || host === "twitter.com") && /^\/[^/]+\/status\/\d+/.test(parsed.pathname)) return true;
+    if (host === "youtube.com" && (parsed.pathname === "/watch" || parsed.pathname.startsWith("/shorts/"))) return true;
+    if (host === "youtu.be" && parsed.pathname.length > 1) return true;
   } catch {}
+  return false;
 }
 
-document.addEventListener("pointerdown", (event) => {
-  if (event.button === 2) rememberEvent(event);
-}, true);
-
-document.addEventListener("contextmenu", rememberEvent, true);
-
-function looksLikeCopyLinkClick(event) {
-  const element = event.target instanceof Element ? event.target : event.target && event.target.parentElement;
-  if (!element) return false;
-  const text = (element.innerText || element.textContent || "").trim();
-  const menuItem = element.closest('[role="menuitem"], [data-testid]');
-  const menuText = menuItem ? (menuItem.innerText || menuItem.textContent || "").trim() : "";
-  return /复制链接|复制連結|Copy link|Copy Link/.test(text + " " + menuText);
-}
-
-function isSupportedShareUrl(url) {
-  return /^https?:\\/\\/(x\\.com|twitter\\.com)\\/[^/]+\\/status\\/\\d+/.test(url)
-    || /^https?:\\/\\/(www\\.)?youtube\\.com\\/watch\\?/.test(url)
-    || /^https?:\\/\\/(www\\.)?youtube\\.com\\/shorts\\//.test(url)
-    || /^https?:\\/\\/youtu\\.be\\//.test(url);
-}
-
-async function maybeSubmitCopiedLink() {
+async function readClipboardVideoUrl() {
   try {
     const text = (await navigator.clipboard.readText()).trim();
     const url = normalizeUrl(text);
-    if (!isSupportedShareUrl(url)) return;
-    const ok = window.confirm("发送到 TG Relay 下载最高画质？\\n\\n" + url);
-    if (!ok) return;
-    chrome.runtime.sendMessage({ type: "submit-url", url });
-  } catch (error) {
-    console.warn("TG Relay: cannot read copied link", error);
-  }
+    return isSupportedVideoUrl(url) ? url : "";
+  } catch { return ""; }
 }
 
-async function getClipboardShareUrl() {
+async function isEnabled() {
   try {
-    const text = (await navigator.clipboard.readText()).trim();
-    const url = normalizeUrl(text);
-    return isSupportedShareUrl(url) ? url : "";
-  } catch (error) {
-    console.warn("TG Relay: cannot read clipboard", error);
-    return "";
-  }
+    const response = await chrome.runtime.sendMessage({ type: "get-enabled" });
+    return !response || response.enabled !== false;
+  } catch { return true; }
 }
+
+async function maybePromptCopiedUrl() {
+  if (!(await isEnabled())) return;
+  const url = await readClipboardVideoUrl();
+  if (!url || url === lastClipboardUrl) return;
+  lastClipboardUrl = url;
+  const now = Date.now();
+  if (now - lastPromptAt < 1500) return;
+  lastPromptAt = now;
+  const ok = window.confirm("Send this video to TG Relay?\\n\\n" + url);
+  if (ok) chrome.runtime.sendMessage({ type: "submit-url", url });
+}
+
+document.addEventListener("copy", () => { setTimeout(maybePromptCopiedUrl, 350); }, true);
+document.addEventListener("focus", () => { setTimeout(maybePromptCopiedUrl, 350); }, true);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message && message.type === "get-submit-url") {
-    getClipboardShareUrl().then((clipboardUrl) => {
-      sendResponse({ url: clipboardUrl || lastRightClickUrl || "" });
+  if (message && (message.type === "get-clipboard-url" || message.type === "get-clipboard-or-prompt-url")) {
+    readClipboardVideoUrl().then((url) => {
+      if (!url && message.type === "get-clipboard-or-prompt-url") {
+        const pasted = window.prompt("Paste an X or YouTube video URL:", "");
+        const pastedUrl = normalizeUrl(pasted || "");
+        sendResponse({ url: isSupportedVideoUrl(pastedUrl) ? pastedUrl : "" });
+        return;
+      }
+      sendResponse({ url });
     });
     return true;
   }
-  if (message && message.type === "get-right-click-url") {
-    sendResponse({ url: lastRightClickUrl });
-  }
-  return true;
+  return false;
 });
 '''
 (extension_dir / "content.js").write_text(content, encoding="utf-8")
@@ -1323,9 +1258,9 @@ readme = """TG Video Relay Sender
 1. Open chrome://extensions
 2. Enable Developer mode
 3. Load unpacked: select this chrome-tg-relay-extension folder
-4. Right-click an X/YouTube page or link and choose: 发送到 TG Relay 下载最高画质
-
-Tip: On X, the most reliable method is: click the X share button, click Copy link / 复制链接, then right-click and choose 发送到 TG Relay 下载最高画质. The extension reads the copied real /status/ URL first.
+4. Copy an X/Twitter or YouTube video URL. The extension asks before submitting.
+5. Left-click the extension icon to submit the copied URL manually.
+6. Right-click the page or extension icon to enable/disable TG Relay.
 """
 (extension_dir / "README.txt").write_text(readme, encoding="utf-8")
 
