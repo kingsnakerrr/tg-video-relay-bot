@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v66"
+APP_VERSION="v67"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -986,7 +986,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.2.2",
+    "version": "1.2.3",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1179,8 +1179,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {{
 '''
 (extension_dir / "background.js").write_text(background, encoding="utf-8")
 
-content = r'''let lastClipboardUrl = "";
+content = r'''let lastPromptedUrl = "";
 let lastPromptAt = 0;
+let clipboardWatchToken = 0;
 
 function normalizeUrl(raw) {
   if (!raw) return "";
@@ -1220,25 +1221,42 @@ async function isEnabled() {
   } catch { return true; }
 }
 
-async function maybePromptCopiedUrl() {
+async function maybePromptCopiedUrl(reason = "") {
   if (!(await isEnabled())) return;
   const url = await readClipboardVideoUrl();
-  if (!url || url === lastClipboardUrl) return;
-  lastClipboardUrl = url;
   const now = Date.now();
-  if (now - lastPromptAt < 1500) return;
+  if (!url) return;
+  if (url === lastPromptedUrl && now - lastPromptAt < 8000) return;
+  if (now - lastPromptAt < 1200) return;
+  lastPromptedUrl = url;
   lastPromptAt = now;
   const ok = window.confirm("Send this video to TG Relay?\\n\\n" + url);
   if (ok) chrome.runtime.sendMessage({ type: "submit-url", url });
 }
 
-document.addEventListener("copy", () => { setTimeout(maybePromptCopiedUrl, 350); }, true);
-document.addEventListener("focus", () => { setTimeout(maybePromptCopiedUrl, 350); }, true);
-document.addEventListener("click", () => { setTimeout(maybePromptCopiedUrl, 450); }, true);
-document.addEventListener("mouseup", () => { setTimeout(maybePromptCopiedUrl, 450); }, true);
+function watchClipboardForVideoUrl(reason = "") {
+  const token = ++clipboardWatchToken;
+  const delays = [80, 250, 550, 900, 1400, 2200, 3200, 4600, 6200];
+  for (const delay of delays) {
+    setTimeout(() => {
+      if (token !== clipboardWatchToken) return;
+      maybePromptCopiedUrl(reason);
+    }, delay);
+  }
+}
+
+document.addEventListener("copy", () => { watchClipboardForVideoUrl("copy"); }, true);
+document.addEventListener("cut", () => { watchClipboardForVideoUrl("cut"); }, true);
+document.addEventListener("focus", () => { watchClipboardForVideoUrl("focus"); }, true);
+document.addEventListener("click", () => { watchClipboardForVideoUrl("click"); }, true);
+document.addEventListener("mouseup", () => { watchClipboardForVideoUrl("mouseup"); }, true);
+document.addEventListener("pointerup", () => { watchClipboardForVideoUrl("pointerup"); }, true);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) watchClipboardForVideoUrl("visible");
+}, true);
 document.addEventListener("keyup", (event) => {
   if ((event.ctrlKey || event.metaKey) && String(event.key || "").toLowerCase() === "c") {
-    setTimeout(maybePromptCopiedUrl, 350);
+    watchClipboardForVideoUrl("keyboard-copy");
   }
 }, true);
 
