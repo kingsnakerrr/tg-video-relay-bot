@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v68: Chrome copy popup now stops after one confirm/cancel per copied URL, preventing repeated submit prompts.
+
 Update v67: Chrome extension watches the clipboard for several seconds after copy/click so X/YouTube copied links can trigger the confirm popup more reliably.
 
 Update v66: Page right-click send menu is restored; enable/disable remains only on the extension icon right-click. Copy detection also checks click/mouseup/keyboard copy events.

@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v67"
+APP_VERSION="v68"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -986,7 +986,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.2.3",
+    "version": "1.2.4",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1182,6 +1182,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {{
 content = r'''let lastPromptedUrl = "";
 let lastPromptAt = 0;
 let clipboardWatchToken = 0;
+let promptOpen = false;
+const promptedUrls = new Map();
 
 function normalizeUrl(raw) {
   if (!raw) return "";
@@ -1226,12 +1228,21 @@ async function maybePromptCopiedUrl(reason = "") {
   const url = await readClipboardVideoUrl();
   const now = Date.now();
   if (!url) return;
-  if (url === lastPromptedUrl && now - lastPromptAt < 8000) return;
+  const lastSeenAt = promptedUrls.get(url) || 0;
+  if (lastSeenAt && now - lastSeenAt < 10 * 60 * 1000) return;
+  if (promptOpen) return;
   if (now - lastPromptAt < 1200) return;
+  promptOpen = true;
   lastPromptedUrl = url;
   lastPromptAt = now;
-  const ok = window.confirm("Send this video to TG Relay?\\n\\n" + url);
-  if (ok) chrome.runtime.sendMessage({ type: "submit-url", url });
+  promptedUrls.set(url, now);
+  clipboardWatchToken++;
+  try {
+    const ok = window.confirm("Send this video to TG Relay?\n\n" + url);
+    if (ok) chrome.runtime.sendMessage({ type: "submit-url", url });
+  } finally {
+    promptOpen = false;
+  }
 }
 
 function watchClipboardForVideoUrl(reason = "") {
