@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v69"
+APP_VERSION="v70"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -986,7 +986,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.2.5",
+    "version": "1.2.6",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1147,10 +1147,19 @@ async function getUrlFromTab(tab, promptIfMissing = false) {{
   }} catch (error) {{ return ""; }}
 }}
 
+async function getContextUrlFromTab(tab) {{
+  if (!tab || !tab.id) return "";
+  try {{
+    const response = await chrome.tabs.sendMessage(tab.id, {{ type: "get-context-url" }});
+    if (response && response.url) return response.url;
+  }} catch (error) {{}}
+  return "";
+}}
+
 chrome.runtime.onInstalled.addListener(async () => {{
   await setEnabled(await isEnabled());
   chrome.contextMenus.removeAll(() => {{
-    chrome.contextMenus.create({{ id: "send-to-tg-relay", title: "Send copied X/YouTube video to TG Relay", contexts: ["page", "link", "video", "image", "audio", "selection", "action"] }});
+    chrome.contextMenus.create({{ id: "send-to-tg-relay", title: "Send this X/YouTube video to TG Relay", contexts: ["page", "link", "video", "image", "audio", "selection", "action"] }});
     chrome.contextMenus.create({{ id: "tg-relay-enable", title: "TG Relay: enable", contexts: ["action"] }});
     chrome.contextMenus.create({{ id: "tg-relay-disable", title: "TG Relay: disable", contexts: ["action"] }});
   }});
@@ -1160,8 +1169,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {{
   if (info.menuItemId === "tg-relay-enable") {{ await setEnabled(true); mark("ON"); return; }}
   if (info.menuItemId === "tg-relay-disable") {{ await setEnabled(false); return; }}
   if (info.menuItemId !== "send-to-tg-relay") return;
-  const copiedUrl = await getUrlFromTab(tab, true);
-  const targetUrl = copiedUrl || info.linkUrl || info.srcUrl || "";
+  const contextUrl = await getContextUrlFromTab(tab);
+  const targetUrl = contextUrl || info.linkUrl || info.srcUrl || info.pageUrl || "";
   submitUrl(targetUrl);
 }});
 
@@ -1184,6 +1193,7 @@ let lastPromptAt = 0;
 let clipboardWatchToken = 0;
 let promptedWatchToken = 0;
 let promptOpen = false;
+let lastContextUrl = "";
 
 function normalizeUrl(raw) {
   if (!raw) return "";
@@ -1206,6 +1216,41 @@ function isSupportedVideoUrl(url) {
     if (host === "youtu.be" && parsed.pathname.length > 1) return true;
   } catch {}
   return false;
+}
+
+function firstSupportedUrl(candidates) {
+  for (const candidate of candidates) {
+    const url = normalizeUrl(candidate || "");
+    if (isSupportedVideoUrl(url)) return url;
+  }
+  return "";
+}
+
+function findContextVideoUrl(target) {
+  const candidates = [];
+  const add = (value) => {
+    if (value) candidates.push(value);
+  };
+  let element = target && target.nodeType === Node.ELEMENT_NODE ? target : target && target.parentElement;
+  for (let node = element; node && node !== document.documentElement; node = node.parentElement) {
+    if (node.href) add(node.href);
+    if (node.getAttribute) {
+      add(node.getAttribute("href"));
+      add(node.getAttribute("data-href"));
+    }
+  }
+  if (element && element.closest) {
+    const article = element.closest("article");
+    if (article) {
+      article.querySelectorAll('a[href*="/status/"]').forEach((anchor) => add(anchor.href));
+    }
+    const youtubeCard = element.closest("ytd-rich-item-renderer,ytd-video-renderer,ytd-grid-video-renderer,ytd-reel-item-renderer,ytd-compact-video-renderer");
+    if (youtubeCard) {
+      youtubeCard.querySelectorAll('a[href*="/watch"],a[href*="/shorts/"],a#thumbnail').forEach((anchor) => add(anchor.href));
+    }
+  }
+  add(location.href);
+  return firstSupportedUrl(candidates);
 }
 
 async function readClipboardVideoUrl() {
@@ -1257,6 +1302,9 @@ function watchClipboardForVideoUrl(reason = "") {
 
 document.addEventListener("copy", () => { watchClipboardForVideoUrl("copy"); }, true);
 document.addEventListener("cut", () => { watchClipboardForVideoUrl("cut"); }, true);
+document.addEventListener("contextmenu", (event) => {
+  lastContextUrl = findContextVideoUrl(event.target);
+}, true);
 document.addEventListener("keyup", (event) => {
   if ((event.ctrlKey || event.metaKey) && String(event.key || "").toLowerCase() === "c") {
     watchClipboardForVideoUrl("keyboard-copy");
@@ -1264,6 +1312,10 @@ document.addEventListener("keyup", (event) => {
 }, true);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message && message.type === "get-context-url") {
+    sendResponse({ url: isSupportedVideoUrl(lastContextUrl) ? lastContextUrl : "" });
+    return true;
+  }
   if (message && (message.type === "get-clipboard-url" || message.type === "get-clipboard-or-prompt-url")) {
     readClipboardVideoUrl().then((url) => {
       if (!url && message.type === "get-clipboard-or-prompt-url") {
@@ -1288,7 +1340,8 @@ readme = """TG Video Relay Sender
 3. Load unpacked: select this chrome-tg-relay-extension folder
 4. Copy an X/Twitter or YouTube video URL. The extension asks before submitting.
 5. Left-click the extension icon to submit the copied URL manually.
-6. Right-click the page or extension icon to enable/disable TG Relay.
+6. Right-click an X/YouTube video, link, or post to submit that item directly.
+7. Right-click the extension icon to enable/disable TG Relay.
 """
 (extension_dir / "README.txt").write_text(readme, encoding="utf-8")
 

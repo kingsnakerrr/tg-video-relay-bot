@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v70: Chrome right-click menu now submits the video/post/link you clicked directly; copied-link prompting remains separate.
+
 Update v69: Chrome copy popup now asks once per copy action, so copying the same URL again after cancel will prompt again.
 
 Update v68: Chrome copy popup now stops after one confirm/cancel per copied URL, preventing repeated submit prompts.
