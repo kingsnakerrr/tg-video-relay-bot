@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>砰！图床</title>
+  <meta name="description" content="私有、安全、顺手的 Google 团队盘图床" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main id="setup" class="setup-shell hidden">
+    <section class="setup-card">
+      <div class="setup-head"><div class="brand-mark">砰</div><div><p class="eyebrow">FIRST RUN SETUP</p><h1>首次配置图床</h1><p>所有配置只保存在你的 VPS，不会传给第三方。</p></div></div>
+      <form id="setup-form" class="settings-form">
+        <div class="setup-step"><span>01</span><div><h2>填写访问域名</h2><label>图床完整网址<input id="setup-url" type="url" required placeholder="https://img.example.com"></label><p class="form-help">必须与浏览器最终访问地址一致；正式使用请配置 HTTPS。</p></div></div>
+        <div class="setup-step"><span>02</span><div><h2>连接 Google 团队盘</h2><ol class="guide"><li>Google Cloud 启用 <b>Google Drive API</b>，创建“服务账号”并下载 JSON 密钥。</li><li>在团队盘的“管理成员”里加入 JSON 中的服务账号邮箱，角色选择<b>内容管理员</b>。</li><li>团队盘中新建图床目录，然后填写下面两个 ID。</li></ol><div class="field-grid"><label>团队盘 ID<input id="setup-drive" required placeholder="0AxxxxxxxxxxxxPVA"></label><label>目标目录 ID<input id="setup-folder" required placeholder="1Abcxxxxxxxxxxxx"></label></div><label>服务账号 JSON<textarea id="setup-json" rows="7" required placeholder='粘贴下载的完整 JSON 内容'></textarea></label><label class="file-label">或选择 JSON 文件<input id="setup-json-file" type="file" accept="application/json,.json"></label></div></div>
+        <button class="setup-submit" type="submit">测试连接并完成安装 <span>→</span></button><p id="setup-error" class="error" role="alert"></p>
+      </form>
+    </section>
+  </main>
+  <main id="login" class="login-shell hidden">
+    <section class="login-card">
+      <div class="brand-mark">砰</div>
+      <p class="eyebrow">PRIVATE IMAGE HOST</p>
+      <h1 id="login-title">你的图片，<br><span>干净地抵达。</span></h1>
+      <p id="login-subtitle" class="muted">输入前端账号和密码，进入私人图床。</p>
+      <form id="login-form">
+        <label class="sr-only" for="username">账号</label>
+        <div class="password-row"><input id="username" autocomplete="username" placeholder="账号" required></div>
+        <label class="sr-only" for="password">访问密码</label>
+        <div class="password-row"><input id="password" type="password" autocomplete="current-password" placeholder="访问密码" required><button>进入 <span>→</span></button></div>
+        <p id="login-error" class="error" role="alert"></p>
+      </form>
+      <p class="secure-note"><i></i> 团队盘保持私有 · 链接由你的服务器签发</p>
+    </section>
+  </main>
+
+  <main id="app" class="app-shell hidden">
+    <header>
+      <a class="logo" href="#"><span>砰</span><b>图床</b></a>
+      <div class="header-actions"><span id="role-badge" class="status"><i></i> 已登录</span><button id="open-settings" class="icon-btn">后台设置</button><button id="logout" class="icon-btn" title="退出">退出</button></div>
+    </header>
+
+    <section class="hero">
+      <p class="eyebrow">DROP · PASTE · SHARE</p>
+      <h1>把图片放这儿，<br><span>链接马上就来。</span></h1>
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="上传图片">
+        <input id="file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" multiple hidden>
+        <div class="upload-glyph">↗</div>
+        <div><h2>拖进来，或直接粘贴</h2><p>也可以 <button id="choose-file" class="text-button">选择本地文件</button> · JPG / PNG / WebP / GIF / AVIF · 单张 <span id="max-size">25</span>MB</p></div>
+        <div class="keycaps"><kbd>Ctrl</kbd><span>+</span><kbd>V</kbd></div>
+      </div>
+      <div class="upload-options">
+        <label for="ttl">链接有效期</label>
+        <select id="ttl"><option value="0">永久有效</option><option value="1">1 天</option><option value="7">7 天</option><option value="30">30 天</option><option value="365">1 年</option></select>
+        <span>过期后链接自动失效，原图仍可在后台处理</span>
+      </div>
+      <div id="queue" class="queue"></div>
+    </section>
+
+    <section class="library">
+      <div class="library-head">
+        <div><p class="eyebrow">YOUR LIBRARY</p><h2>图片记录</h2></div>
+        <nav id="periods" aria-label="时间范围"><button data-period="today">今天</button><button data-period="week">本周</button><button class="active" data-period="month">本月</button><button data-period="all">全部</button></nav>
+      </div>
+      <div class="stats"><div><span id="stat-count">—</span><small>张图片</small></div><div><span id="stat-size">—</span><small>占用空间</small></div><div><span id="stat-views">—</span><small>总访问</small></div></div>
+      <div id="gallery" class="gallery" aria-live="polite"></div>
+      <button id="load-more" class="load-more hidden">再加载一些</button>
+    </section>
+  </main>
+  <dialog id="settings-dialog">
+    <form id="settings-form" class="settings-form" method="dialog">
+      <div class="dialog-head"><div><p class="eyebrow">ADMIN SETTINGS</p><h2>图床设置</h2></div><button id="close-settings" type="button" aria-label="关闭">×</button></div>
+      <label>图床完整网址<input id="settings-url" type="url" required></label>
+      <div class="field-grid"><label>团队盘 ID<input id="settings-drive" required></label><label>目标目录 ID<input id="settings-folder" required></label></div>
+      <label>服务账号 JSON <small id="settings-email"></small><textarea id="settings-json" rows="4" placeholder="不更换密钥请留空"></textarea></label>
+      <label>默认链接有效期<select id="settings-ttl"><option value="0">永久</option><option value="1">1 天</option><option value="7">7 天</option><option value="30">30 天</option><option value="365">1 年</option></select></label>
+      <details><summary>修改登录密码</summary><div class="field-grid"><label>当前密码<input id="current-password" type="password"></label><label>新密码<input id="new-password" type="password" minlength="10"></label></div></details>
+      <section class="user-admin"><div><h3>前端登录账号</h3><p class="form-help">账号用于前端上传页；重复填写同名账号会重置其密码。</p></div><div class="field-grid"><label>前端账号<input id="new-user" placeholder="例如 uploader"></label><label>前端密码<input id="new-user-password" type="password" minlength="8" placeholder="至少 8 位"></label></div><button id="save-user" class="secondary-button" type="button">新增 / 重置账号</button><div id="user-list" class="user-list"></div></section>
+      <p class="form-help">保存时会真实连接 Google Drive API 测试团队盘和目录。</p><p id="settings-error" class="error"></p>
+      <button class="setup-submit" type="submit">测试并保存</button>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

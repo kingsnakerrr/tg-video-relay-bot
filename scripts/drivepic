@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+DIR="${DRIVEPIC_DIR:-/opt/drivepic}"
+cd "$DIR"
+case "${1:-help}" in
+  status) docker compose ps ;;
+  logs) docker compose logs -f --tail=200 drivepic caddy ;;
+  restart) docker compose restart ;;
+  update)
+    git pull --ff-only
+    docker compose up -d --build
+    echo "更新完成。"
+    ;;
+  credentials)
+    . "$DIR/.env"
+    echo "前端地址：https://$DOMAIN:7078/"
+    echo "后端地址：https://$DOMAIN:7077/admin"
+    echo "后台账号：admin"
+    echo "后台初始密码：$(cat "$DIR/data/.admin-password")"
+    ;;
+  backup)
+    mkdir -p "$DIR/backups"
+    tar -czf "$DIR/backups/drivepic-$(date +%Y%m%d-%H%M%S).tar.gz" -C "$DIR" data .env
+    echo "备份已保存到 $DIR/backups"
+    ;;
+  *)
+    echo "用法：drivepic {status|logs|restart|update|credentials|backup}"
+    ;;
+esac
