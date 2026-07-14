@@ -182,6 +182,7 @@ def _admin_status_text(settings: Settings, job_queue: JobQueue) -> str:
         f"UPLOAD_RETRIES={settings.upload_retries}\n"
         f"X cookies：{settings.cookies_file_x or '未设置'}\n"
         f"YouTube cookies：{settings.cookies_file_youtube or '未设置'}"
+        f"\nPornhub cookies：{settings.cookies_file_pornhub or '未设置'}"
     )
 
 

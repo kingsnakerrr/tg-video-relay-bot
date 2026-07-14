@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v70"
+APP_VERSION="v71"
 DEFAULT_APP_DIR="/opt/tg-video-relay-bot"
 APP_DIR_FROM_ENV="${APP_DIR:-}"
 APP_DIR="${APP_DIR:-${DEFAULT_APP_DIR}}"
@@ -12,7 +12,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-12.1"
+INSTALLER_VERSION="2026-07-14.1"
 DENO_INSTALL_STATUS="skipped"
 DEFAULT_DOWNLOAD_FORMAT="bv*+ba/best"
 OLD_1080P_DOWNLOAD_FORMAT="bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best"
@@ -226,6 +226,11 @@ retry_or_die "create Python venv" "${PYTHON_BIN}" -m venv .venv
 retry_or_die "upgrade pip" python -m pip install --upgrade pip
 retry_or_die "install Python requirements" python -m pip install --upgrade -r requirements.txt
 retry_or_die "install yt-dlp" python -m pip install --upgrade yt-dlp
+if retry_optional "install curl-cffi for Pornhub browser impersonation" python -m pip install --upgrade curl-cffi; then
+  echo "curl-cffi installed / Pornhub browser impersonation dependency installed"
+else
+  echo "WARNING: curl-cffi is unavailable; public Pornhub links may still work."
+fi
 
 if command -v deno >/dev/null 2>&1; then
   DENO_INSTALL_STATUS="already installed"
@@ -301,9 +306,11 @@ YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android
 COOKIES_FILE=
 COOKIES_FILE_X=${APP_DIR}/cookies_x.txt
 COOKIES_FILE_YOUTUBE=${APP_DIR}/cookies_youtube.txt
+COOKIES_FILE_PORNHUB=${APP_DIR}/cookies_pornhub.txt
 COOKIE_SYNC_URL=
 COOKIE_SYNC_URL_X=${COOKIE_SYNC_URL_X}
 COOKIE_SYNC_URL_YOUTUBE=${COOKIE_SYNC_URL_YOUTUBE}
+COOKIE_SYNC_URL_PORNHUB=
 COOKIE_SYNC_INTERVAL_MINUTES=360
 UPLOAD_MODE=video
 DELETE_AFTER_ALL_UPLOADS=true
@@ -350,9 +357,11 @@ fi
 grep -q '^COOKIES_FILE=' .env || printf 'COOKIES_FILE=\n' >> .env
 grep -q '^COOKIES_FILE_X=' .env || printf 'COOKIES_FILE_X=%s/cookies_x.txt\n' "${APP_DIR}" >> .env
 grep -q '^COOKIES_FILE_YOUTUBE=' .env || printf 'COOKIES_FILE_YOUTUBE=%s/cookies_youtube.txt\n' "${APP_DIR}" >> .env
+grep -q '^COOKIES_FILE_PORNHUB=' .env || printf 'COOKIES_FILE_PORNHUB=%s/cookies_pornhub.txt\n' "${APP_DIR}" >> .env
 grep -q '^COOKIE_SYNC_URL=' .env || printf 'COOKIE_SYNC_URL=\n' >> .env
 grep -q '^COOKIE_SYNC_URL_X=' .env || printf 'COOKIE_SYNC_URL_X=\n' >> .env
 grep -q '^COOKIE_SYNC_URL_YOUTUBE=' .env || printf 'COOKIE_SYNC_URL_YOUTUBE=\n' >> .env
+grep -q '^COOKIE_SYNC_URL_PORNHUB=' .env || printf 'COOKIE_SYNC_URL_PORNHUB=\n' >> .env
 grep -q '^COOKIE_SYNC_INTERVAL_MINUTES=' .env || printf 'COOKIE_SYNC_INTERVAL_MINUTES=360\n' >> .env
 grep -q '^SUBMIT_API_ENABLED=' .env || printf 'SUBMIT_API_ENABLED=true\n' >> .env
 grep -q '^SUBMIT_API_HOST=' .env || printf 'SUBMIT_API_HOST=0.0.0.0\n' >> .env
@@ -369,7 +378,7 @@ grep -q '^SUBMIT_NOTIFY_CHAT_ID=' .env || printf 'SUBMIT_NOTIFY_CHAT_ID=\n' >> .
 DOWNLOAD_DIR_CURRENT="$(grep -E '^DOWNLOAD_DIR=' .env | tail -n 1 | cut -d= -f2-)"
 [ -n "${DOWNLOAD_DIR_CURRENT}" ] || DOWNLOAD_DIR_CURRENT="${APP_DIR}/downloads"
 mkdir -p "${DOWNLOAD_DIR_CURRENT}"
-for cookie_file in "${APP_DIR}/cookies.txt" "${APP_DIR}/cookies_x.txt" "${APP_DIR}/cookies_youtube.txt"; do
+for cookie_file in "${APP_DIR}/cookies.txt" "${APP_DIR}/cookies_x.txt" "${APP_DIR}/cookies_youtube.txt" "${APP_DIR}/cookies_pornhub.txt"; do
   [ -f "${cookie_file}" ] && chmod 600 "${cookie_file}"
 done
 

@@ -135,6 +135,11 @@ def sync_cookies_if_needed(settings: Settings, *, force: bool = False) -> str | 
             raise CookieSyncError("COOKIE_SYNC_URL_YOUTUBE is set, but COOKIES_FILE_YOUTUBE is empty.")
         jobs.append((settings.cookie_sync_url_youtube, settings.cookies_file_youtube, "YouTube"))
 
+    if settings.cookie_sync_url_pornhub:
+        if settings.cookies_file_pornhub is None:
+            raise CookieSyncError("COOKIE_SYNC_URL_PORNHUB is set, but COOKIES_FILE_PORNHUB is empty.")
+        jobs.append((settings.cookie_sync_url_pornhub, settings.cookies_file_pornhub, "Pornhub"))
+
     if not jobs and settings.cookie_sync_url:
         if settings.cookies_file_x is not None:
             cookies_file = settings.cookies_file_x

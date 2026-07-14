@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v71: added Pornhub video URL support, optional independent cookies/sync settings, and Chrome right-click/copy submission support. Public videos usually work without cookies; restricted/login-required videos can use `cookies_pornhub.txt`.
+
 Update v70: Chrome right-click menu now submits the video/post/link you clicked directly; copied-link prompting remains separate.
 
 Update v69: Chrome copy popup now asks once per copy action, so copying the same URL again after cancel will prompt again.
@@ -139,7 +141,7 @@ x chrome http://143.20.156.100:8787/submit
 /data/opt/tg-video-relay-bot/chrome-tg-relay-extension.zip
 ```
 
-把这个 zip 下载到电脑解压，Chrome 打开 `chrome://extensions`，开启开发者模式，点“加载已解压的扩展程序”，选择解压后的 `chrome-tg-relay-extension` 文件夹。以后在 X/YouTube 页面或链接上右键，选择“发送到 TG Relay 下载最高画质”即可。
+把这个 zip 下载到电脑解压，Chrome 打开 `chrome://extensions`，开启开发者模式，点“加载已解压的扩展程序”，选择解压后的 `chrome-tg-relay-extension` 文件夹。以后在 X/YouTube/Pornhub 视频页面或链接上右键，选择 TG Relay 提交菜单即可。
 
 注意：扩展包里包含你的 `SUBMIT_API_SECRET`，不要上传到公开仓库。
 

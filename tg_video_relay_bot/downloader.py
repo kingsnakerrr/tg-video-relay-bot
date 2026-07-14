@@ -54,6 +54,8 @@ def _url_kind(url: str) -> str:
         return "douyin"
     if "x.com" in lowered or "twitter.com" in lowered or "video.twimg.com" in lowered:
         return "twitter"
+    if "pornhub.com" in lowered:
+        return "pornhub"
     return "generic"
 
 
@@ -64,6 +66,7 @@ def _headers_for(url: str) -> dict[str, str]:
         "tiktok": "https://www.tiktok.com/",
         "douyin": "https://www.douyin.com/",
         "twitter": "https://x.com/",
+        "pornhub": "https://www.pornhub.com/",
     }
     return {
         "User-Agent": (
@@ -105,6 +108,16 @@ def _friendly_download_error(url: str, message: str) -> str:
                 "TikTok returned HTTP 403 Forbidden. Run `x ytdlp-update` first. If it still fails, "
                 "use TikTok cookies in COOKIES_FILE or try from another VPS IP/region."
             )
+        if kind == "pornhub":
+            return (
+                "Pornhub returned HTTP 403 Forbidden. Run `x ytdlp-update` first. If it still fails, "
+                "export Netscape cookies to cookies_pornhub.txt, set COOKIES_FILE_PORNHUB, then restart."
+            )
+    if kind == "pornhub" and any(marker in lowered for marker in ("login required", "sign in", "age verification")):
+        return (
+            "Pornhub requires a browser session for this video. Export Netscape cookies to "
+            "cookies_pornhub.txt, set COOKIES_FILE_PORNHUB, then restart the bot."
+        )
     return message
 
 
@@ -125,7 +138,12 @@ def _sync_cookies_or_fail(settings: Settings, cleanup_dir: Path | None = None) -
     except CookieSyncError as exc:
         has_any_cookie_file = any(
             path and path.exists()
-            for path in (settings.cookies_file_x, settings.cookies_file_youtube, settings.cookies_file)
+            for path in (
+                settings.cookies_file_x,
+                settings.cookies_file_youtube,
+                settings.cookies_file_pornhub,
+                settings.cookies_file,
+            )
         )
         if not has_any_cookie_file:
             if cleanup_dir is not None:
@@ -140,6 +158,8 @@ def _cookie_file_for_url(url: str, settings: Settings) -> Path | None:
         candidates = [settings.cookies_file_youtube, settings.cookies_file]
     elif kind == "twitter":
         candidates = [settings.cookies_file_x, settings.cookies_file]
+    elif kind == "pornhub":
+        candidates = [settings.cookies_file_pornhub, settings.cookies_file]
     else:
         candidates = [settings.cookies_file]
 
