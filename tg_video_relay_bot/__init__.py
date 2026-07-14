@@ -1,1 +1,0 @@
-"""Telegram video relay bot."""
