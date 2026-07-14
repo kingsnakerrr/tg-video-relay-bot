@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v74: Chrome extension updates now inject the copy/right-click listener into already-open X, YouTube and Pornhub tabs, with a duplicate-injection guard.
+
 Update v73: Pornhub regional hosts such as cn.pornhub.com are normalized to www.pornhub.com, and the Chrome extension now runs on every Pornhub subdomain so copied links trigger the confirmation popup.
 
 Update v72: Pornhub downloads now retry with a real Chrome TLS/browser fingerprint through yt-dlp and curl-cffi before using the normal request path.

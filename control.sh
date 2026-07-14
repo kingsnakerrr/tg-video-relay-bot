@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v73"
+APP_VERSION="v74"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -999,7 +999,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.2.8",
+    "version": "1.2.9",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1186,6 +1186,25 @@ async function getContextUrlFromTab(tab) {{
   return "";
 }}
 
+async function injectIntoOpenVideoTabs() {{
+  const patterns = [
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "https://youtube.com/*",
+    "https://www.youtube.com/*",
+    "https://youtu.be/*",
+    "https://*.pornhub.com/*"
+  ];
+  let tabs = [];
+  try {{ tabs = await chrome.tabs.query({{ url: patterns }}); }} catch (error) {{ return; }}
+  for (const tab of tabs) {{
+    if (!tab.id) continue;
+    try {{
+      await chrome.scripting.executeScript({{ target: {{ tabId: tab.id }}, files: ["content.js"] }});
+    }} catch (error) {{}}
+  }}
+}}
+
 chrome.runtime.onInstalled.addListener(async () => {{
   await setEnabled(await isEnabled());
   chrome.contextMenus.removeAll(() => {{
@@ -1193,7 +1212,10 @@ chrome.runtime.onInstalled.addListener(async () => {{
     chrome.contextMenus.create({{ id: "tg-relay-enable", title: "TG Relay: enable", contexts: ["action"] }});
     chrome.contextMenus.create({{ id: "tg-relay-disable", title: "TG Relay: disable", contexts: ["action"] }});
   }});
+  await injectIntoOpenVideoTabs();
 }});
+
+injectIntoOpenVideoTabs();
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {{
   if (info.menuItemId === "tg-relay-enable") {{ await setEnabled(true); mark("ON"); return; }}
@@ -1218,7 +1240,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {{
 '''
 (extension_dir / "background.js").write_text(background, encoding="utf-8")
 
-content = r'''let lastPromptedUrl = "";
+content = r'''if (!globalThis.__tgRelayContentLoaded) {
+globalThis.__tgRelayContentLoaded = true;
+
+let lastPromptedUrl = "";
 let lastPromptAt = 0;
 let clipboardWatchToken = 0;
 let promptedWatchToken = 0;
@@ -1370,6 +1395,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   return false;
 });
+}
 '''
 (extension_dir / "content.js").write_text(content, encoding="utf-8")
 
