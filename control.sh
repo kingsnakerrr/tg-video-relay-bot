@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v72"
+APP_VERSION="v73"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -999,7 +999,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.2.7",
+    "version": "1.2.8",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1015,7 +1015,9 @@ manifest = {
                 "https://youtu.be/*",
                 "https://pornhub.com/*",
                 "https://www.pornhub.com/*",
-                "https://m.pornhub.com/*"
+                "https://m.pornhub.com/*",
+                "https://cn.pornhub.com/*",
+                "https://*.pornhub.com/*"
             ],
             "js": ["content.js"],
             "run_at": "document_idle",
@@ -1050,6 +1052,11 @@ function cleanUrl(url) {{
     const statusMatch = parsed.pathname.match(/^\/([^/]+)\/status\/(\d+)/);
     if ((parsed.hostname === "x.com" || parsed.hostname === "twitter.com") && statusMatch) {{
       return parsed.origin + "/" + statusMatch[1] + "/status/" + statusMatch[2];
+    }}
+    if (parsed.hostname === "pornhub.com" || parsed.hostname.endsWith(".pornhub.com")) {{
+      parsed.protocol = "https:";
+      parsed.hostname = "www.pornhub.com";
+      return parsed.href;
     }}
     return parsed.href;
   }} catch {{
@@ -1130,6 +1137,11 @@ async function getUrlFromTab(tab, promptIfMissing = false) {{
             const statusMatch = parsed.pathname.match(/^\/([^/]+)\/status\/(\d+)/);
             if ((parsed.hostname === "x.com" || parsed.hostname === "twitter.com") && statusMatch) {{
               return parsed.origin + "/" + statusMatch[1] + "/status/" + statusMatch[2];
+            }}
+            if (parsed.hostname === "pornhub.com" || parsed.hostname.endsWith(".pornhub.com")) {{
+              parsed.protocol = "https:";
+              parsed.hostname = "www.pornhub.com";
+              return parsed.href;
             }}
             return parsed.href;
           }} catch {{ return String(raw || ""); }}
@@ -1220,6 +1232,11 @@ function normalizeUrl(raw) {
     const statusMatch = parsed.pathname.match(/^\/([^/]+)\/status\/(\d+)/);
     if ((parsed.hostname === "x.com" || parsed.hostname === "twitter.com") && statusMatch) {
       return parsed.origin + "/" + statusMatch[1] + "/status/" + statusMatch[2];
+    }
+    if (parsed.hostname === "pornhub.com" || parsed.hostname.endsWith(".pornhub.com")) {
+      parsed.protocol = "https:";
+      parsed.hostname = "www.pornhub.com";
+      return parsed.href;
     }
     return parsed.href;
   } catch { return String(raw || ""); }

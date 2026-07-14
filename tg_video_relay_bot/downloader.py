@@ -5,6 +5,7 @@ import shutil
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 import yt_dlp
 
@@ -47,6 +48,17 @@ class DownloadResult:
     file_path: Path
     title: str
     format_summary: str
+
+
+def _canonicalize_platform_url(url: str) -> str:
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return url
+    hostname = (parsed.hostname or "").lower()
+    if hostname == "pornhub.com" or hostname.endswith(".pornhub.com"):
+        return urlunsplit(("https", "www.pornhub.com", parsed.path, parsed.query, parsed.fragment))
+    return url
 
 
 def _url_kind(url: str) -> str:
@@ -430,6 +442,7 @@ def _should_try_next_client(url: str, error: DownloadError) -> bool:
 
 
 def probe_resolutions(url: str, settings: Settings) -> ResolutionProbe:
+    url = _canonicalize_platform_url(url)
     _sync_cookies_or_fail(settings)
     client_sets = _youtube_client_sets(settings) if _url_kind(url) == "youtube" else [[]]
     request_profiles = _request_profiles(url)
@@ -527,6 +540,7 @@ def _download_format_summary(info: dict[str, object]) -> str:
 
 
 def download_video(url: str, settings: Settings, download_format: str | None = None) -> DownloadResult:
+    url = _canonicalize_platform_url(url)
     settings.download_dir.mkdir(parents=True, exist_ok=True)
     job_dir = settings.download_dir / uuid.uuid4().hex
     job_dir.mkdir(parents=True, exist_ok=False)

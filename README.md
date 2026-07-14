@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v73: Pornhub regional hosts such as cn.pornhub.com are normalized to www.pornhub.com, and the Chrome extension now runs on every Pornhub subdomain so copied links trigger the confirmation popup.
+
 Update v72: Pornhub downloads now retry with a real Chrome TLS/browser fingerprint through yt-dlp and curl-cffi before using the normal request path.
 
 Update v71: added Pornhub video URL support, optional independent cookies/sync settings, and Chrome right-click/copy submission support. Public videos usually work without cookies; restricted/login-required videos can use `cookies_pornhub.txt`.
