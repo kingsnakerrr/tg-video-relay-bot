@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v72: Pornhub downloads now retry with a real Chrome TLS/browser fingerprint through yt-dlp and curl-cffi before using the normal request path.
+
 Update v71: added Pornhub video URL support, optional independent cookies/sync settings, and Chrome right-click/copy submission support. Public videos usually work without cookies; restricted/login-required videos can use `cookies_pornhub.txt`.
 
 Update v70: Chrome right-click menu now submits the video/post/link you clicked directly; copied-link prompting remains separate.

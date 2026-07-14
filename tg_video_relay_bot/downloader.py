@@ -8,6 +8,11 @@ from pathlib import Path
 
 import yt_dlp
 
+try:
+    from yt_dlp.networking.impersonate import ImpersonateTarget
+except ImportError:  # Older yt-dlp versions can still use the normal request path.
+    ImpersonateTarget = None
+
 from .config import Settings
 from .cookie_sync import CookieSyncError, sync_cookies_if_needed
 from .formats import DEFAULT_DOWNLOAD_FORMAT, DEFAULT_MAX_HEIGHT, SAFE_FALLBACK_DOWNLOAD_FORMAT
@@ -187,11 +192,21 @@ def _youtube_client_sets(settings: Settings) -> list[list[str]]:
     return unique
 
 
+def _request_profiles(url: str) -> list[tuple[str, object | None]]:
+    if _url_kind(url) != "pornhub" or ImpersonateTarget is None:
+        return [("default", None)]
+    return [
+        ("chrome", ImpersonateTarget.from_str("chrome")),
+        ("default", None),
+    ]
+
+
 def _base_ytdlp_options(
     url: str,
     settings: Settings,
     *,
     youtube_clients: list[str] | None = None,
+    impersonate_target: object | None = None,
 ) -> dict[str, object]:
     options: dict[str, object] = {
         "noplaylist": True,
@@ -212,6 +227,8 @@ def _base_ytdlp_options(
         options["source_address"] = "0.0.0.0"
     if settings.ytdlp_http_chunk_size > 0:
         options["http_chunk_size"] = settings.ytdlp_http_chunk_size
+    if impersonate_target is not None:
+        options["impersonate"] = impersonate_target
     if youtube_clients is None:
         youtube_clients = settings.youtube_player_clients
     if youtube_clients:
@@ -414,41 +431,55 @@ def _should_try_next_client(url: str, error: DownloadError) -> bool:
 
 def probe_resolutions(url: str, settings: Settings) -> ResolutionProbe:
     _sync_cookies_or_fail(settings)
-    client_sets = _youtube_client_sets(settings) if _url_kind(url) == "youtube" else [settings.youtube_player_clients]
+    client_sets = _youtube_client_sets(settings) if _url_kind(url) == "youtube" else [[]]
+    request_profiles = _request_profiles(url)
 
     best_probe: ResolutionProbe | None = None
     last_error: Exception | None = None
-    for clients in client_sets:
-        options = _base_ytdlp_options(url, settings, youtube_clients=clients)
-        options["format"] = SAFE_FALLBACK_DOWNLOAD_FORMAT
-        options["ignore_no_formats_error"] = True
-        LOGGER.info("Probing formats: url=%s clients=%s", url, ",".join(clients) or "default")
-        try:
-            with yt_dlp.YoutubeDL(options) as ydl:
-                info = ydl.extract_info(url, download=False)
-        except Exception as exc:
-            last_error = exc
-            LOGGER.warning(
-                "Format probe failed: url=%s clients=%s error=%s",
+    for request_profile, impersonate_target in request_profiles:
+        for clients in client_sets:
+            options = _base_ytdlp_options(
+                url,
+                settings,
+                youtube_clients=clients,
+                impersonate_target=impersonate_target,
+            )
+            options["format"] = SAFE_FALLBACK_DOWNLOAD_FORMAT
+            options["ignore_no_formats_error"] = True
+            LOGGER.info(
+                "Probing formats: url=%s clients=%s request_profile=%s",
                 url,
                 ",".join(clients) or "default",
-                exc,
+                request_profile,
             )
-            continue
+            try:
+                with yt_dlp.YoutubeDL(options) as ydl:
+                    info = ydl.extract_info(url, download=False)
+            except Exception as exc:
+                last_error = exc
+                LOGGER.warning(
+                    "Format probe failed: url=%s clients=%s request_profile=%s error=%s",
+                    url,
+                    ",".join(clients) or "default",
+                    request_profile,
+                    exc,
+                )
+                continue
 
-        probe = _probe_from_info(info or {})
-        LOGGER.info(
-            "Format probe result: url=%s clients=%s title=%r choices=%s default=%s",
-            url,
-            ",".join(clients) or "default",
-            probe.title,
-            ", ".join(f"{choice.height}p[{choice.format_selector}]" for choice in probe.choices),
-            probe.default_height,
-        )
-        if best_probe is None or _probe_score(probe) > _probe_score(best_probe):
-            best_probe = probe
-        if probe.default_height and probe.default_height >= DEFAULT_MAX_HEIGHT:
-            break
+            probe = _probe_from_info(info or {})
+            LOGGER.info(
+                "Format probe result: url=%s clients=%s request_profile=%s title=%r choices=%s default=%s",
+                url,
+                ",".join(clients) or "default",
+                request_profile,
+                probe.title,
+                ", ".join(f"{choice.height}p[{choice.format_selector}]" for choice in probe.choices),
+                probe.default_height,
+            )
+            if best_probe is None or _probe_score(probe) > _probe_score(best_probe):
+                best_probe = probe
+            if probe.default_height and probe.default_height >= DEFAULT_MAX_HEIGHT:
+                break
 
     if best_probe is not None:
         return best_probe
@@ -507,47 +538,58 @@ def download_video(url: str, settings: Settings, download_format: str | None = N
     allow_fallback = download_format is None
     if allow_fallback and SAFE_FALLBACK_DOWNLOAD_FORMAT not in format_attempts:
         format_attempts.append(SAFE_FALLBACK_DOWNLOAD_FORMAT)
-    client_sets = _youtube_client_sets(settings) if _url_kind(url) == "youtube" else [settings.youtube_player_clients]
+    client_sets = _youtube_client_sets(settings) if _url_kind(url) == "youtube" else [[]]
+    request_profiles = _request_profiles(url)
 
     info: dict[str, object] | None = None
     last_error: DownloadError | None = None
     for format_selector in format_attempts:
-        for clients in client_sets:
-            LOGGER.info(
-                "Downloading video: url=%s format=%s clients=%s allow_fallback=%s",
-                url,
-                format_selector,
-                ",".join(clients) or "default",
-                allow_fallback,
-            )
-            options = _base_ytdlp_options(url, settings, youtube_clients=clients)
-            options.update(
-                {
-                    "format": format_selector,
-                    "outtmpl": str(job_dir / "%(title).180B [%(id)s].%(ext)s"),
-                    "merge_output_format": settings.merge_output_format,
-                }
-            )
-            try:
-                info = _download_with_options(url, options)
+        for request_profile, impersonate_target in request_profiles:
+            for clients in client_sets:
                 LOGGER.info(
-                    "Download succeeded: url=%s format=%s clients=%s result=%s",
+                    "Downloading video: url=%s format=%s clients=%s request_profile=%s allow_fallback=%s",
                     url,
                     format_selector,
                     ",".join(clients) or "default",
-                    _download_format_summary(info),
+                    request_profile,
+                    allow_fallback,
                 )
-                break
-            except DownloadError as exc:
-                last_error = exc
-                if not _should_try_next_client(url, exc):
+                options = _base_ytdlp_options(
+                    url,
+                    settings,
+                    youtube_clients=clients,
+                    impersonate_target=impersonate_target,
+                )
+                options.update(
+                    {
+                        "format": format_selector,
+                        "outtmpl": str(job_dir / "%(title).180B [%(id)s].%(ext)s"),
+                        "merge_output_format": settings.merge_output_format,
+                    }
+                )
+                try:
+                    info = _download_with_options(url, options)
+                    LOGGER.info(
+                        "Download succeeded: url=%s format=%s clients=%s request_profile=%s result=%s",
+                        url,
+                        format_selector,
+                        ",".join(clients) or "default",
+                        request_profile,
+                        _download_format_summary(info),
+                    )
                     break
-                LOGGER.info(
-                    "Trying next YouTube client after failure: url=%s format=%s failed_clients=%s",
-                    url,
-                    format_selector,
-                    ",".join(clients) or "default",
-                )
+                except DownloadError as exc:
+                    last_error = exc
+                    if not _should_try_next_client(url, exc):
+                        break
+                    LOGGER.info(
+                        "Trying next YouTube client after failure: url=%s format=%s failed_clients=%s",
+                        url,
+                        format_selector,
+                        ",".join(clients) or "default",
+                    )
+            if info is not None:
+                break
         if info is not None:
             break
 
