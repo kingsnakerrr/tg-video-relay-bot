@@ -166,6 +166,7 @@ def _friendly_download_error(url: str, message: str) -> str:
             "unable to extract universal data",
             "login required",
             "sign in",
+            "no video formats found",
         )
     ):
         return (
@@ -182,6 +183,7 @@ def _friendly_download_error(url: str, message: str) -> str:
             "unable to extract universal data",
             "login required",
             "sign in",
+            "no video formats found",
         )
     ):
         return (

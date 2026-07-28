@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v77: Chrome clipboard parsing now extracts supported URLs from full share text, including Douyin descriptions containing `v.douyin.com` short links.
+
 Update v76: Chrome now detects TikTok/Douyin JavaScript copy/share buttons, tracking parameters are removed before downloading, and TikTok/Douyin anti-bot failures show actionable cookie guidance.
 
 Update v75: added complete TikTok/Douyin support for full and short links, independent cookies and sync URLs, Chrome copy/right-click submission, and Chrome fingerprint retries on VPS networks.

@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v76"
+APP_VERSION="v77"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -1023,7 +1023,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.3.1",
+    "version": "1.3.2",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1237,12 +1237,20 @@ async function getUrlFromTab(tab, promptIfMissing = false) {{
           return false;
         }}
         return navigator.clipboard.readText().then((text) => {{
-          const url = normalize(String(text || "").trim());
-          if (supported(url)) return url;
+          const rawText = String(text || "").trim();
+          const candidates = [rawText, ...(rawText.match(/https?:\/\/[^\s<>"']+/gi) || [])];
+          for (const candidate of candidates) {{
+            const url = normalize(candidate.replace(/[，。！？、；：,.;:!?）)\]}}]+$/g, ""));
+            if (supported(url)) return url;
+          }}
           if (!promptIfMissingArg) return "";
           const pasted = window.prompt("Paste an X, YouTube, TikTok, Douyin or Pornhub video URL:", "");
-          const pastedUrl = normalize(pasted || "");
-          return supported(pastedUrl) ? pastedUrl : "";
+          const pastedCandidates = [String(pasted || ""), ...((String(pasted || "")).match(/https?:\/\/[^\s<>"']+/gi) || [])];
+          for (const candidate of pastedCandidates) {{
+            const pastedUrl = normalize(candidate.replace(/[，。！？、；：,.;:!?）)\]}}]+$/g, ""));
+            if (supported(pastedUrl)) return pastedUrl;
+          }}
+          return "";
         }}).catch(() => {{
           if (!promptIfMissingArg) return "";
           const pasted = window.prompt("Paste an X, YouTube, TikTok, Douyin or Pornhub video URL:", "");
@@ -1394,6 +1402,11 @@ function firstSupportedUrl(candidates) {
   return "";
 }
 
+function urlsFromText(text) {
+  const matches = String(text || "").match(/https?:\/\/[^\s<>"']+/gi) || [];
+  return matches.map((value) => value.replace(/[，。！？、；：,.;:!?）)\]}]+$/g, ""));
+}
+
 function findContextVideoUrl(target) {
   const candidates = [];
   const add = (value) => {
@@ -1432,8 +1445,7 @@ function findContextVideoUrl(target) {
 async function readClipboardVideoUrl() {
   try {
     const text = (await navigator.clipboard.readText()).trim();
-    const url = normalizeUrl(text);
-    return isSupportedVideoUrl(url) ? url : "";
+    return firstSupportedUrl([text, ...urlsFromText(text)]);
   } catch { return ""; }
 }
 
@@ -1515,8 +1527,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     readClipboardVideoUrl().then((url) => {
       if (!url && message.type === "get-clipboard-or-prompt-url") {
         const pasted = window.prompt("Paste an X, YouTube, TikTok, Douyin or Pornhub video URL:", "");
-        const pastedUrl = normalizeUrl(pasted || "");
-        sendResponse({ url: isSupportedVideoUrl(pastedUrl) ? pastedUrl : "" });
+        sendResponse({ url: firstSupportedUrl([pasted, ...urlsFromText(pasted)]) });
         return;
       }
       sendResponse({ url });
