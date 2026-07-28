@@ -123,7 +123,14 @@ def _friendly_download_error(url: str, message: str) -> str:
         if kind == "tiktok":
             return (
                 "TikTok returned HTTP 403 Forbidden. Run `x ytdlp-update` first. If it still fails, "
-                "use TikTok cookies in COOKIES_FILE or try from another VPS IP/region."
+                "export Netscape cookies to cookies_tiktok.txt, set COOKIES_FILE_TIKTOK, "
+                "or try another VPS IP/region."
+            )
+        if kind == "douyin":
+            return (
+                "Douyin returned HTTP 403 Forbidden. Run `x ytdlp-update` first. If it still fails, "
+                "export Netscape cookies to cookies_douyin.txt, set COOKIES_FILE_DOUYIN, "
+                "or try another VPS IP/region."
             )
         if kind == "pornhub":
             return (
@@ -159,6 +166,8 @@ def _sync_cookies_or_fail(settings: Settings, cleanup_dir: Path | None = None) -
                 settings.cookies_file_x,
                 settings.cookies_file_youtube,
                 settings.cookies_file_pornhub,
+                settings.cookies_file_tiktok,
+                settings.cookies_file_douyin,
                 settings.cookies_file,
             )
         )
@@ -177,6 +186,10 @@ def _cookie_file_for_url(url: str, settings: Settings) -> Path | None:
         candidates = [settings.cookies_file_x, settings.cookies_file]
     elif kind == "pornhub":
         candidates = [settings.cookies_file_pornhub, settings.cookies_file]
+    elif kind == "tiktok":
+        candidates = [settings.cookies_file_tiktok, settings.cookies_file]
+    elif kind == "douyin":
+        candidates = [settings.cookies_file_douyin, settings.cookies_file]
     else:
         candidates = [settings.cookies_file]
 
@@ -205,7 +218,7 @@ def _youtube_client_sets(settings: Settings) -> list[list[str]]:
 
 
 def _request_profiles(url: str) -> list[tuple[str, object | None]]:
-    if _url_kind(url) != "pornhub" or ImpersonateTarget is None:
+    if _url_kind(url) not in {"pornhub", "tiktok", "douyin"} or ImpersonateTarget is None:
         return [("default", None)]
     return [
         ("chrome", ImpersonateTarget.from_str("chrome")),

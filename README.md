@@ -1,5 +1,18 @@
 # Telegram Video Relay Bot
 
+Update v75: added complete TikTok/Douyin support for full and short links, independent cookies and sync URLs, Chrome copy/right-click submission, and Chrome fingerprint retries on VPS networks.
+
+TikTok and Douyin public videos are tried without cookies first. Login-only, age/region-restricted, private, CAPTCHA, or VPS-blocked videos may require separate Netscape cookie files:
+
+```env
+COOKIES_FILE_TIKTOK=/opt/tg-video-relay-bot/cookies_tiktok.txt
+COOKIES_FILE_DOUYIN=/opt/tg-video-relay-bot/cookies_douyin.txt
+COOKIE_SYNC_URL_TIKTOK=
+COOKIE_SYNC_URL_DOUYIN=
+```
+
+Export each file from a logged-in browser on the matching website. Do not commit cookie files or secret sync links to a public repository.
+
 Update v74: Chrome extension updates now inject the copy/right-click listener into already-open X, YouTube and Pornhub tabs, with a duplicate-injection guard.
 
 Update v73: Pornhub regional hosts such as cn.pornhub.com are normalized to www.pornhub.com, and the Chrome extension now runs on every Pornhub subdomain so copied links trigger the confirmation popup.

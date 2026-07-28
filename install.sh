@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v74"
+APP_VERSION="v75"
 DEFAULT_APP_DIR="/opt/tg-video-relay-bot"
 APP_DIR_FROM_ENV="${APP_DIR:-}"
 APP_DIR="${APP_DIR:-${DEFAULT_APP_DIR}}"
@@ -12,7 +12,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-14.4"
+INSTALLER_VERSION="2026-07-28.1"
 DENO_INSTALL_STATUS="skipped"
 DEFAULT_DOWNLOAD_FORMAT="bv*+ba/best"
 OLD_1080P_DOWNLOAD_FORMAT="bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best"
@@ -268,6 +268,8 @@ if [ ! -f .env ]; then
   DOWNLOAD_DIR_VALUE="${DOWNLOAD_DIR_INPUT:-${DEFAULT_DOWNLOAD_DIR}}"
   read -r -p "Optional X cookies sync link, press Enter to skip / 可选 X cookies 同步链接，回车跳过: " COOKIE_SYNC_URL_X
   read -r -p "Optional YouTube cookies sync link, press Enter to skip / 可选 YouTube cookies 同步链接，回车跳过: " COOKIE_SYNC_URL_YOUTUBE
+  read -r -p "Optional TikTok cookies sync link, press Enter to skip: " COOKIE_SYNC_URL_TIKTOK
+  read -r -p "Optional Douyin cookies sync link, press Enter to skip / 可选抖音 cookies 同步直链，回车跳过: " COOKIE_SYNC_URL_DOUYIN
   read -r -p "Optional Local Bot API ID, press Enter to skip / 可选 Local Bot API ID，回车跳过: " LOCAL_API_ID
   if [ -n "${LOCAL_API_ID}" ]; then
     read -r -s -p "Optional Local Bot API hash / 可选 Local Bot API hash: " LOCAL_API_HASH
@@ -307,10 +309,14 @@ COOKIES_FILE=
 COOKIES_FILE_X=${APP_DIR}/cookies_x.txt
 COOKIES_FILE_YOUTUBE=${APP_DIR}/cookies_youtube.txt
 COOKIES_FILE_PORNHUB=${APP_DIR}/cookies_pornhub.txt
+COOKIES_FILE_TIKTOK=${APP_DIR}/cookies_tiktok.txt
+COOKIES_FILE_DOUYIN=${APP_DIR}/cookies_douyin.txt
 COOKIE_SYNC_URL=
 COOKIE_SYNC_URL_X=${COOKIE_SYNC_URL_X}
 COOKIE_SYNC_URL_YOUTUBE=${COOKIE_SYNC_URL_YOUTUBE}
 COOKIE_SYNC_URL_PORNHUB=
+COOKIE_SYNC_URL_TIKTOK=${COOKIE_SYNC_URL_TIKTOK}
+COOKIE_SYNC_URL_DOUYIN=${COOKIE_SYNC_URL_DOUYIN}
 COOKIE_SYNC_INTERVAL_MINUTES=360
 UPLOAD_MODE=video
 DELETE_AFTER_ALL_UPLOADS=true
@@ -358,10 +364,14 @@ grep -q '^COOKIES_FILE=' .env || printf 'COOKIES_FILE=\n' >> .env
 grep -q '^COOKIES_FILE_X=' .env || printf 'COOKIES_FILE_X=%s/cookies_x.txt\n' "${APP_DIR}" >> .env
 grep -q '^COOKIES_FILE_YOUTUBE=' .env || printf 'COOKIES_FILE_YOUTUBE=%s/cookies_youtube.txt\n' "${APP_DIR}" >> .env
 grep -q '^COOKIES_FILE_PORNHUB=' .env || printf 'COOKIES_FILE_PORNHUB=%s/cookies_pornhub.txt\n' "${APP_DIR}" >> .env
+grep -q '^COOKIES_FILE_TIKTOK=' .env || printf 'COOKIES_FILE_TIKTOK=%s/cookies_tiktok.txt\n' "${APP_DIR}" >> .env
+grep -q '^COOKIES_FILE_DOUYIN=' .env || printf 'COOKIES_FILE_DOUYIN=%s/cookies_douyin.txt\n' "${APP_DIR}" >> .env
 grep -q '^COOKIE_SYNC_URL=' .env || printf 'COOKIE_SYNC_URL=\n' >> .env
 grep -q '^COOKIE_SYNC_URL_X=' .env || printf 'COOKIE_SYNC_URL_X=\n' >> .env
 grep -q '^COOKIE_SYNC_URL_YOUTUBE=' .env || printf 'COOKIE_SYNC_URL_YOUTUBE=\n' >> .env
 grep -q '^COOKIE_SYNC_URL_PORNHUB=' .env || printf 'COOKIE_SYNC_URL_PORNHUB=\n' >> .env
+grep -q '^COOKIE_SYNC_URL_TIKTOK=' .env || printf 'COOKIE_SYNC_URL_TIKTOK=\n' >> .env
+grep -q '^COOKIE_SYNC_URL_DOUYIN=' .env || printf 'COOKIE_SYNC_URL_DOUYIN=\n' >> .env
 grep -q '^COOKIE_SYNC_INTERVAL_MINUTES=' .env || printf 'COOKIE_SYNC_INTERVAL_MINUTES=360\n' >> .env
 grep -q '^SUBMIT_API_ENABLED=' .env || printf 'SUBMIT_API_ENABLED=true\n' >> .env
 grep -q '^SUBMIT_API_HOST=' .env || printf 'SUBMIT_API_HOST=0.0.0.0\n' >> .env
@@ -378,7 +388,7 @@ grep -q '^SUBMIT_NOTIFY_CHAT_ID=' .env || printf 'SUBMIT_NOTIFY_CHAT_ID=\n' >> .
 DOWNLOAD_DIR_CURRENT="$(grep -E '^DOWNLOAD_DIR=' .env | tail -n 1 | cut -d= -f2-)"
 [ -n "${DOWNLOAD_DIR_CURRENT}" ] || DOWNLOAD_DIR_CURRENT="${APP_DIR}/downloads"
 mkdir -p "${DOWNLOAD_DIR_CURRENT}"
-for cookie_file in "${APP_DIR}/cookies.txt" "${APP_DIR}/cookies_x.txt" "${APP_DIR}/cookies_youtube.txt" "${APP_DIR}/cookies_pornhub.txt"; do
+for cookie_file in "${APP_DIR}/cookies.txt" "${APP_DIR}/cookies_x.txt" "${APP_DIR}/cookies_youtube.txt" "${APP_DIR}/cookies_pornhub.txt" "${APP_DIR}/cookies_tiktok.txt" "${APP_DIR}/cookies_douyin.txt"; do
   [ -f "${cookie_file}" ] && chmod 600 "${cookie_file}"
 done
 

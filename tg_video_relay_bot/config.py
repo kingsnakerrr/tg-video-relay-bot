@@ -114,10 +114,14 @@ class Settings:
     cookies_file_x: Path | None
     cookies_file_youtube: Path | None
     cookies_file_pornhub: Path | None
+    cookies_file_tiktok: Path | None
+    cookies_file_douyin: Path | None
     cookie_sync_url: str
     cookie_sync_url_x: str
     cookie_sync_url_youtube: str
     cookie_sync_url_pornhub: str
+    cookie_sync_url_tiktok: str
+    cookie_sync_url_douyin: str
     cookie_sync_interval_minutes: int
     submit_api_enabled: bool
     submit_api_host: str
@@ -163,9 +167,13 @@ def load_settings() -> Settings:
     cookies_x_value = os.getenv("COOKIES_FILE_X", "").strip()
     cookies_youtube_value = os.getenv("COOKIES_FILE_YOUTUBE", "").strip()
     cookies_pornhub_value = os.getenv("COOKIES_FILE_PORNHUB", "").strip()
+    cookies_tiktok_value = os.getenv("COOKIES_FILE_TIKTOK", "").strip()
+    cookies_douyin_value = os.getenv("COOKIES_FILE_DOUYIN", "").strip()
     cookies_file_x = Path(cookies_x_value).expanduser() if cookies_x_value else None
     cookies_file_youtube = Path(cookies_youtube_value).expanduser() if cookies_youtube_value else None
     cookies_file_pornhub = Path(cookies_pornhub_value).expanduser() if cookies_pornhub_value else None
+    cookies_file_tiktok = Path(cookies_tiktok_value).expanduser() if cookies_tiktok_value else None
+    cookies_file_douyin = Path(cookies_douyin_value).expanduser() if cookies_douyin_value else None
 
     allowed_user_ids = _parse_user_ids(os.getenv("ALLOWED_USER_IDS", ""))
     submit_notify_chat_id = _parse_optional_chat_id(os.getenv("SUBMIT_NOTIFY_CHAT_ID", ""))
@@ -193,10 +201,14 @@ def load_settings() -> Settings:
         cookies_file_x=cookies_file_x,
         cookies_file_youtube=cookies_file_youtube,
         cookies_file_pornhub=cookies_file_pornhub,
+        cookies_file_tiktok=cookies_file_tiktok,
+        cookies_file_douyin=cookies_file_douyin,
         cookie_sync_url=os.getenv("COOKIE_SYNC_URL", "").strip(),
         cookie_sync_url_x=os.getenv("COOKIE_SYNC_URL_X", "").strip(),
         cookie_sync_url_youtube=os.getenv("COOKIE_SYNC_URL_YOUTUBE", "").strip(),
         cookie_sync_url_pornhub=os.getenv("COOKIE_SYNC_URL_PORNHUB", "").strip(),
+        cookie_sync_url_tiktok=os.getenv("COOKIE_SYNC_URL_TIKTOK", "").strip(),
+        cookie_sync_url_douyin=os.getenv("COOKIE_SYNC_URL_DOUYIN", "").strip(),
         cookie_sync_interval_minutes=max(1, _env_int("COOKIE_SYNC_INTERVAL_MINUTES", 360)),
         submit_api_enabled=_env_bool("SUBMIT_API_ENABLED", True),
         submit_api_host=os.getenv("SUBMIT_API_HOST", "0.0.0.0").strip() or "0.0.0.0",

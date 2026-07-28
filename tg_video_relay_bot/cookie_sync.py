@@ -140,6 +140,16 @@ def sync_cookies_if_needed(settings: Settings, *, force: bool = False) -> str | 
             raise CookieSyncError("COOKIE_SYNC_URL_PORNHUB is set, but COOKIES_FILE_PORNHUB is empty.")
         jobs.append((settings.cookie_sync_url_pornhub, settings.cookies_file_pornhub, "Pornhub"))
 
+    if settings.cookie_sync_url_tiktok:
+        if settings.cookies_file_tiktok is None:
+            raise CookieSyncError("COOKIE_SYNC_URL_TIKTOK is set, but COOKIES_FILE_TIKTOK is empty.")
+        jobs.append((settings.cookie_sync_url_tiktok, settings.cookies_file_tiktok, "TikTok"))
+
+    if settings.cookie_sync_url_douyin:
+        if settings.cookies_file_douyin is None:
+            raise CookieSyncError("COOKIE_SYNC_URL_DOUYIN is set, but COOKIES_FILE_DOUYIN is empty.")
+        jobs.append((settings.cookie_sync_url_douyin, settings.cookies_file_douyin, "Douyin"))
+
     if not jobs and settings.cookie_sync_url:
         if settings.cookies_file_x is not None:
             cookies_file = settings.cookies_file_x
@@ -173,7 +183,7 @@ def main() -> None:
     except CookieSyncError as exc:
         print(f"Cookie sync failed: {exc}", file=sys.stderr)
         sys.exit(1)
-    print(message or "COOKIE_SYNC_URL_X/COOKIE_SYNC_URL_YOUTUBE are empty; nothing to sync.")
+    print(message or "All COOKIE_SYNC_URL_* settings are empty; nothing to sync.")
 
 
 if __name__ == "__main__":

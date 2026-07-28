@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v74"
+APP_VERSION="v75"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -39,7 +39,7 @@ Usage / 用法:
   x ytdlp-update       Update yt-dlp downloader / 更新 yt-dlp 下载器
   x ytdlp-version      Show yt-dlp version / 查看 yt-dlp 版本
   x switch-mode        Switch upload mode / 切换上传模式
-  x cookies-test       Test X, YouTube and Pornhub cookies / 检测 X、YouTube 和 Pornhub cookies
+  x cookies-test       Test all platform cookies / 检测所有平台 cookies
   x test-submit URL    Submit one URL from the VPS itself / 在 VPS 本机测试提交链接
   x cookies            Sync cookies now / 立即同步 cookies
   x cookies-menu       Show/change/sync cookie links / 查看、修改、同步 cookies
@@ -93,7 +93,7 @@ Actions / 操作菜单
 6) Logs / 日志
 7) Switch upload mode / 切换上传模式
 8) Update yt-dlp downloader / 更新 yt-dlp 下载器
-9) Test cookies / 检测 X、YouTube 和 Pornhub cookies
+9) Test cookies / 检测所有平台 cookies
 10) Cookies sync / Cookies 同步和直链设置
 11) Test submit X URL / 测试提交 X 链接
 12) Test submit YouTube URL / 测试提交 YouTube 链接
@@ -383,6 +383,8 @@ test_all_cookies() {
   cookie_file_status "X" "$(env_value COOKIES_FILE_X)" '(^|[[:space:]])\.?(x|twitter)\.com[[:space:]]'
   cookie_file_status "YouTube" "$(env_value COOKIES_FILE_YOUTUBE)" '(^|[[:space:]])\.?(youtube|google)\.com[[:space:]]'
   cookie_file_status "Pornhub" "$(env_value COOKIES_FILE_PORNHUB)" '(^|[[:space:]])\.?(pornhub)\.com[[:space:]]'
+  cookie_file_status "TikTok" "$(env_value COOKIES_FILE_TIKTOK)" '(^|[[:space:]])\.?(tiktok)\.com[[:space:]]'
+  cookie_file_status "Douyin" "$(env_value COOKIES_FILE_DOUYIN)" '(^|[[:space:]])\.?(douyin|iesdouyin)\.com[[:space:]]'
 }
 
 cookie_sync_config() {
@@ -401,6 +403,10 @@ cookie_sync_config() {
   echo "  COOKIE_SYNC_URL_YOUTUBE=$(env_value COOKIE_SYNC_URL_YOUTUBE)"
   echo "  COOKIES_FILE_PORNHUB=$(env_value COOKIES_FILE_PORNHUB)"
   echo "  COOKIE_SYNC_URL_PORNHUB=$(env_value COOKIE_SYNC_URL_PORNHUB)"
+  echo "  COOKIES_FILE_TIKTOK=$(env_value COOKIES_FILE_TIKTOK)"
+  echo "  COOKIE_SYNC_URL_TIKTOK=$(env_value COOKIE_SYNC_URL_TIKTOK)"
+  echo "  COOKIES_FILE_DOUYIN=$(env_value COOKIES_FILE_DOUYIN)"
+  echo "  COOKIE_SYNC_URL_DOUYIN=$(env_value COOKIE_SYNC_URL_DOUYIN)"
   echo "  COOKIE_SYNC_INTERVAL_MINUTES=$(env_value COOKIE_SYNC_INTERVAL_MINUTES)"
   echo
   echo "Google Drive share links like /file/d/.../view are OK; the program converts them automatically."
@@ -423,6 +429,18 @@ cookie_sync_config() {
   if [[ "${change_pornhub}" =~ ^[Yy]$ ]]; then
     read -r -p "New Pornhub cookies sync link, empty to clear: " new_pornhub
     set_env_value "${env_file}" COOKIE_SYNC_URL_PORNHUB "${new_pornhub}"
+  fi
+
+  read -r -p "Change TikTok cookies sync link? [y/N]: " change_tiktok
+  if [[ "${change_tiktok}" =~ ^[Yy]$ ]]; then
+    read -r -p "New TikTok cookies sync link, empty to clear: " new_tiktok
+    set_env_value "${env_file}" COOKIE_SYNC_URL_TIKTOK "${new_tiktok}"
+  fi
+
+  read -r -p "Change Douyin cookies sync link? [y/N] / 是否修改抖音 cookies 直链？[y/N]: " change_douyin
+  if [[ "${change_douyin}" =~ ^[Yy]$ ]]; then
+    read -r -p "New Douyin cookies sync link, empty to clear / 新抖音 cookies 直链，留空删除: " new_douyin
+    set_env_value "${env_file}" COOKIE_SYNC_URL_DOUYIN "${new_douyin}"
   fi
 
   current_interval="$(env_value COOKIE_SYNC_INTERVAL_MINUTES)"
@@ -671,10 +689,14 @@ ensure_upload_env() {
   grep -q '^COOKIES_FILE_X=' "${env_file}" || printf 'COOKIES_FILE_X=%s/cookies_x.txt\n' "${APP_DIR}" >> "${env_file}"
   grep -q '^COOKIES_FILE_YOUTUBE=' "${env_file}" || printf 'COOKIES_FILE_YOUTUBE=%s/cookies_youtube.txt\n' "${APP_DIR}" >> "${env_file}"
   grep -q '^COOKIES_FILE_PORNHUB=' "${env_file}" || printf 'COOKIES_FILE_PORNHUB=%s/cookies_pornhub.txt\n' "${APP_DIR}" >> "${env_file}"
+  grep -q '^COOKIES_FILE_TIKTOK=' "${env_file}" || printf 'COOKIES_FILE_TIKTOK=%s/cookies_tiktok.txt\n' "${APP_DIR}" >> "${env_file}"
+  grep -q '^COOKIES_FILE_DOUYIN=' "${env_file}" || printf 'COOKIES_FILE_DOUYIN=%s/cookies_douyin.txt\n' "${APP_DIR}" >> "${env_file}"
   grep -q '^COOKIE_SYNC_URL=' "${env_file}" || printf 'COOKIE_SYNC_URL=\n' >> "${env_file}"
   grep -q '^COOKIE_SYNC_URL_X=' "${env_file}" || printf 'COOKIE_SYNC_URL_X=\n' >> "${env_file}"
   grep -q '^COOKIE_SYNC_URL_YOUTUBE=' "${env_file}" || printf 'COOKIE_SYNC_URL_YOUTUBE=\n' >> "${env_file}"
   grep -q '^COOKIE_SYNC_URL_PORNHUB=' "${env_file}" || printf 'COOKIE_SYNC_URL_PORNHUB=\n' >> "${env_file}"
+  grep -q '^COOKIE_SYNC_URL_TIKTOK=' "${env_file}" || printf 'COOKIE_SYNC_URL_TIKTOK=\n' >> "${env_file}"
+  grep -q '^COOKIE_SYNC_URL_DOUYIN=' "${env_file}" || printf 'COOKIE_SYNC_URL_DOUYIN=\n' >> "${env_file}"
   grep -q '^COOKIE_SYNC_INTERVAL_MINUTES=' "${env_file}" || printf 'COOKIE_SYNC_INTERVAL_MINUTES=360\n' >> "${env_file}"
   if [ "$(env_value COOKIES_FILE)" = "${APP_DIR}/cookies.txt" ]; then
     set_env_value "${env_file}" COOKIES_FILE ""
@@ -762,6 +784,8 @@ run() {
       printf 'COOKIES_FILE_X=%s\n' "$(env_value COOKIES_FILE_X)"
       printf 'COOKIES_FILE_YOUTUBE=%s\n' "$(env_value COOKIES_FILE_YOUTUBE)"
       printf 'COOKIES_FILE_PORNHUB=%s\n' "$(env_value COOKIES_FILE_PORNHUB)"
+      printf 'COOKIES_FILE_TIKTOK=%s\n' "$(env_value COOKIES_FILE_TIKTOK)"
+      printf 'COOKIES_FILE_DOUYIN=%s\n' "$(env_value COOKIES_FILE_DOUYIN)"
       printf 'COOKIES_FILE=%s\n' "$(env_value COOKIES_FILE)"
       [ -n "$(env_value COOKIE_SYNC_URL_X)" ] && echo "COOKIE_SYNC_URL_X=set / 已设置" || echo "COOKIE_SYNC_URL_X=empty / 未设置"
       [ -n "$(env_value COOKIE_SYNC_URL_YOUTUBE)" ] && echo "COOKIE_SYNC_URL_YOUTUBE=set / 已设置" || echo "COOKIE_SYNC_URL_YOUTUBE=empty / 未设置"
@@ -999,7 +1023,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.2.9",
+    "version": "1.3.0",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1017,7 +1041,12 @@ manifest = {
                 "https://www.pornhub.com/*",
                 "https://m.pornhub.com/*",
                 "https://cn.pornhub.com/*",
-                "https://*.pornhub.com/*"
+                "https://*.pornhub.com/*",
+                "https://*.tiktok.com/*",
+                "https://tiktok.com/*",
+                "https://*.douyin.com/*",
+                "https://douyin.com/*",
+                "https://*.iesdouyin.com/*"
             ],
             "js": ["content.js"],
             "run_at": "document_idle",
@@ -1073,6 +1102,8 @@ function isSupportedVideoUrl(url) {{
     if (host === "youtube.com" && (parsed.pathname === "/watch" || parsed.pathname.startsWith("/shorts/"))) return true;
     if (host === "youtu.be" && parsed.pathname.length > 1) return true;
     if ((host === "pornhub.com" || host.endsWith(".pornhub.com")) && (parsed.pathname === "/view_video.php" || parsed.pathname.startsWith("/embed/") || parsed.pathname.startsWith("/shorties/"))) return true;
+    if ((host === "tiktok.com" || host.endsWith(".tiktok.com")) && parsed.pathname.length > 1) return true;
+    if ((host === "douyin.com" || host.endsWith(".douyin.com") || host === "iesdouyin.com" || host.endsWith(".iesdouyin.com")) && parsed.pathname.length > 1) return true;
   }} catch {{}}
   return false;
 }}
@@ -1100,7 +1131,7 @@ async function submitUrl(rawUrl) {{
   const targetUrl = cleanUrl(rawUrl);
   if (!isSupportedVideoUrl(targetUrl) || targetUrl.startsWith("chrome://") || targetUrl.startsWith("edge://")) {{
     mark("ERR");
-    console.warn("TG Relay: no supported X/YouTube/Pornhub video URL found", targetUrl);
+    console.warn("TG Relay: no supported video URL found", targetUrl);
     return;
   }}
   try {{
@@ -1154,6 +1185,8 @@ async function getUrlFromTab(tab, promptIfMissing = false) {{
             if (host === "youtube.com" && (parsed.pathname === "/watch" || parsed.pathname.startsWith("/shorts/"))) return true;
             if (host === "youtu.be" && parsed.pathname.length > 1) return true;
             if ((host === "pornhub.com" || host.endsWith(".pornhub.com")) && (parsed.pathname === "/view_video.php" || parsed.pathname.startsWith("/embed/") || parsed.pathname.startsWith("/shorties/"))) return true;
+            if ((host === "tiktok.com" || host.endsWith(".tiktok.com")) && parsed.pathname.length > 1) return true;
+            if ((host === "douyin.com" || host.endsWith(".douyin.com") || host === "iesdouyin.com" || host.endsWith(".iesdouyin.com")) && parsed.pathname.length > 1) return true;
           }} catch {{}}
           return false;
         }}
@@ -1161,12 +1194,12 @@ async function getUrlFromTab(tab, promptIfMissing = false) {{
           const url = normalize(String(text || "").trim());
           if (supported(url)) return url;
           if (!promptIfMissingArg) return "";
-          const pasted = window.prompt("Paste an X, YouTube or Pornhub video URL:", "");
+          const pasted = window.prompt("Paste an X, YouTube, TikTok, Douyin or Pornhub video URL:", "");
           const pastedUrl = normalize(pasted || "");
           return supported(pastedUrl) ? pastedUrl : "";
         }}).catch(() => {{
           if (!promptIfMissingArg) return "";
-          const pasted = window.prompt("Paste an X, YouTube or Pornhub video URL:", "");
+          const pasted = window.prompt("Paste an X, YouTube, TikTok, Douyin or Pornhub video URL:", "");
           const pastedUrl = normalize(pasted || "");
           return supported(pastedUrl) ? pastedUrl : "";
         }});
@@ -1193,7 +1226,10 @@ async function injectIntoOpenVideoTabs() {{
     "https://youtube.com/*",
     "https://www.youtube.com/*",
     "https://youtu.be/*",
-    "https://*.pornhub.com/*"
+    "https://*.pornhub.com/*",
+    "https://*.tiktok.com/*",
+    "https://*.douyin.com/*",
+    "https://*.iesdouyin.com/*"
   ];
   let tabs = [];
   try {{ tabs = await chrome.tabs.query({{ url: patterns }}); }} catch (error) {{ return; }}
@@ -1208,7 +1244,7 @@ async function injectIntoOpenVideoTabs() {{
 chrome.runtime.onInstalled.addListener(async () => {{
   await setEnabled(await isEnabled());
   chrome.contextMenus.removeAll(() => {{
-    chrome.contextMenus.create({{ id: "send-to-tg-relay", title: "Send this X/YouTube/Pornhub video to TG Relay", contexts: ["page", "link", "video", "image", "audio", "selection", "action"] }});
+    chrome.contextMenus.create({{ id: "send-to-tg-relay", title: "Send video to TG Relay", contexts: ["page", "link", "video", "image", "audio", "selection", "action"] }});
     chrome.contextMenus.create({{ id: "tg-relay-enable", title: "TG Relay: enable", contexts: ["action"] }});
     chrome.contextMenus.create({{ id: "tg-relay-disable", title: "TG Relay: disable", contexts: ["action"] }});
   }});
@@ -1275,6 +1311,8 @@ function isSupportedVideoUrl(url) {
     if (host === "youtube.com" && (parsed.pathname === "/watch" || parsed.pathname.startsWith("/shorts/"))) return true;
     if (host === "youtu.be" && parsed.pathname.length > 1) return true;
     if ((host === "pornhub.com" || host.endsWith(".pornhub.com")) && (parsed.pathname === "/view_video.php" || parsed.pathname.startsWith("/embed/") || parsed.pathname.startsWith("/shorties/"))) return true;
+    if ((host === "tiktok.com" || host.endsWith(".tiktok.com")) && parsed.pathname.length > 1) return true;
+    if ((host === "douyin.com" || host.endsWith(".douyin.com") || host === "iesdouyin.com" || host.endsWith(".iesdouyin.com")) && parsed.pathname.length > 1) return true;
   } catch {}
   return false;
 }
@@ -1312,6 +1350,10 @@ function findContextVideoUrl(target) {
     const pornhubCard = element.closest('[class*="video"],[class*="thumb"],li');
     if (pornhubCard) {
       pornhubCard.querySelectorAll('a[href*="view_video.php"],a[href*="/shorties/"]').forEach((anchor) => add(anchor.href));
+    }
+    const shortVideoCard = element.closest('[data-e2e*="video"],[class*="video"],[class*="feed"],li');
+    if (shortVideoCard) {
+      shortVideoCard.querySelectorAll('a[href*="/video/"],a[href*="v.douyin.com"],a[href*="tiktok.com"]').forEach((anchor) => add(anchor.href));
     }
   }
   add(location.href);
@@ -1384,7 +1426,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && (message.type === "get-clipboard-url" || message.type === "get-clipboard-or-prompt-url")) {
     readClipboardVideoUrl().then((url) => {
       if (!url && message.type === "get-clipboard-or-prompt-url") {
-        const pasted = window.prompt("Paste an X, YouTube or Pornhub video URL:", "");
+        const pasted = window.prompt("Paste an X, YouTube, TikTok, Douyin or Pornhub video URL:", "");
         const pastedUrl = normalizeUrl(pasted || "");
         sendResponse({ url: isSupportedVideoUrl(pastedUrl) ? pastedUrl : "" });
         return;
@@ -1404,9 +1446,9 @@ readme = """TG Video Relay Sender
 1. Open chrome://extensions
 2. Enable Developer mode
 3. Load unpacked: select this chrome-tg-relay-extension folder
-4. Copy an X/Twitter, YouTube or Pornhub video URL. The extension asks before submitting.
+4. Copy an X/Twitter, YouTube, TikTok, Douyin or Pornhub video URL. The extension asks before submitting.
 5. Left-click the extension icon to submit the copied URL manually.
-6. Right-click an X/YouTube/Pornhub video, link, or post to submit that item directly.
+6. Right-click a supported video, link, or post to submit that item directly.
 7. Right-click the extension icon to enable/disable TG Relay.
 """
 (extension_dir / "README.txt").write_text(readme, encoding="utf-8")
@@ -1436,8 +1478,8 @@ PY_CHROME_EXTENSION
       echo "     打开 chrome://extensions，开启开发者模式。"
       echo "  3. Click Load unpacked and select the unzipped chrome-tg-relay-extension folder."
       echo "     点“加载已解压的扩展程序”，选择解压后的 chrome-tg-relay-extension 文件夹。"
-      echo "  4. Right-click an X/YouTube/Pornhub video or link and choose the TG Relay menu."
-      echo "     在 X、YouTube 或 Pornhub 视频/链接上右键，选择 TG Relay 提交下载。"
+      echo "  4. Right-click an X/YouTube/TikTok/Douyin/Pornhub video or link and choose the TG Relay menu."
+      echo "     在 X、YouTube、TikTok、抖音或 Pornhub 视频/链接上右键，选择 TG Relay 提交下载。"
       ;;
     env|config)
       need_root
