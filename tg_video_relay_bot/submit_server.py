@@ -5,7 +5,8 @@ from email.parser import BytesParser
 import json
 import logging
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from threading import Thread
+from threading import Lock, Thread
+from time import monotonic
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -16,6 +17,7 @@ from .links import extract_urls
 
 
 MAX_BODY_BYTES = 64 * 1024
+SUBMIT_DEDUP_SECONDS = 8.0
 
 
 class SubmitServerError(RuntimeError):
@@ -128,6 +130,9 @@ def _authorized(handler: BaseHTTPRequestHandler, values: dict[str, list[str]], s
 
 
 def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPRequestHandler]:
+    recent_submissions: dict[str, float] = {}
+    recent_submissions_lock = Lock()
+
     class SubmitHandler(BaseHTTPRequestHandler):
         server_version = "TelegramVideoRelaySubmit/1.0"
 
@@ -173,7 +178,24 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
                 return
 
             positions: list[int] = []
+            queued_urls: list[str] = []
+            duplicate_urls: list[str] = []
             for url in urls:
+                now = monotonic()
+                with recent_submissions_lock:
+                    expired = [
+                        submitted_url
+                        for submitted_url, submitted_at in recent_submissions.items()
+                        if now - submitted_at >= SUBMIT_DEDUP_SECONDS
+                    ]
+                    for submitted_url in expired:
+                        recent_submissions.pop(submitted_url, None)
+                    submitted_at = recent_submissions.get(url)
+                    if submitted_at is not None and now - submitted_at < SUBMIT_DEDUP_SECONDS:
+                        duplicate_urls.append(url)
+                        continue
+                    recent_submissions[url] = now
+
                 logging.info("submit-api queued url: %s", url)
                 download_format, resolution_label = _highest_download_choice(url, settings)
                 positions.append(
@@ -188,15 +210,21 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
                         )
                     )
                 )
+                queued_urls.append(url)
+
+            if duplicate_urls:
+                logging.info("submit-api ignored duplicate urls: %s", duplicate_urls)
 
             _json_response(
                 self,
                 200,
                 {
                     "ok": True,
-                    "queued": len(urls),
+                    "queued": len(queued_urls),
+                    "duplicates": len(duplicate_urls),
                     "positions": positions,
-                    "urls": urls,
+                    "urls": queued_urls,
+                    "duplicate_urls": duplicate_urls,
                 },
             )
 

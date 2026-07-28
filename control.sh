@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v79"
+APP_VERSION="v80"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -1068,7 +1068,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.4.1",
+    "version": "1.4.2",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1584,6 +1584,22 @@ async function isEnabled() {
   } catch { return true; }
 }
 
+async function sendRuntimeMessage(message) {
+  try {
+    if (!chrome.runtime || !chrome.runtime.id) return false;
+    await chrome.runtime.sendMessage(message);
+    return true;
+  } catch (error) {
+    const detail = String(error && error.message ? error.message : error || "");
+    if (/context invalidated|receiving end does not exist/i.test(detail)) {
+      window.alert("TG Relay extension was updated. Reload this page once, then try again.\n\nTG Relay 扩展已更新，请刷新当前网页后重试。");
+      return false;
+    }
+    console.warn("TG Relay message failed:", detail);
+    return false;
+  }
+}
+
 async function promptDetectedUrl(rawUrl, reason = "", token = 0) {
   if (!(await isEnabled())) return;
   if (token && token === promptedWatchToken) return;
@@ -1599,7 +1615,7 @@ async function promptDetectedUrl(rawUrl, reason = "", token = 0) {
   clipboardWatchToken++;
   try {
     const ok = window.confirm("Send this video to TG Relay?\n\n" + url);
-    if (ok) chrome.runtime.sendMessage({ type: "submit-url", url });
+    if (ok) await sendRuntimeMessage({ type: "submit-url", url });
   } finally {
     promptOpen = false;
   }

@@ -1,6 +1,6 @@
 # Telegram Video Relay Bot
 
-Update v79: one detected copy now cancels all pending clipboard probes to prevent duplicate Douyin submissions, and `x tiktok-test URL` diagnoses TikTok directly on the VPS.
+Update v80: Chrome catches stale extension contexts and asks for one page reload instead of throwing an uncaught error. The submit API also ignores the same URL submitted again within eight seconds.
 
 Update v78: Chrome now hooks the host page's real clipboard writes in the MAIN JavaScript world, so TikTok/Douyin copy buttons no longer depend on restricted clipboard reads.
 
