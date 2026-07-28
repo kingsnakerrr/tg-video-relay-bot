@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v79: one detected copy now cancels all pending clipboard probes to prevent duplicate Douyin submissions, and `x tiktok-test URL` diagnoses TikTok directly on the VPS.
+
 Update v78: Chrome now hooks the host page's real clipboard writes in the MAIN JavaScript world, so TikTok/Douyin copy buttons no longer depend on restricted clipboard reads.
 
 Update v77: Chrome clipboard parsing now extracts supported URLs from full share text, including Douyin descriptions containing `v.douyin.com` short links.

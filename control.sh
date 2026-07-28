@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v78"
+APP_VERSION="v79"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -38,6 +38,7 @@ Usage / 用法:
   x doctor             Diagnose service and submit API / 诊断服务和提交接口
   x ytdlp-update       Update yt-dlp downloader / 更新 yt-dlp 下载器
   x ytdlp-version      Show yt-dlp version / 查看 yt-dlp 版本
+  x tiktok-test URL    Diagnose one TikTok URL on this VPS / 在本 VPS 诊断 TikTok 链接
   x switch-mode        Switch upload mode / 切换上传模式
   x cookies-test       Test all platform cookies / 检测所有平台 cookies
   x test-submit URL    Submit one URL from the VPS itself / 在 VPS 本机测试提交链接
@@ -345,6 +346,47 @@ youtube_cookies_test() {
     --no-playlist \
     --skip-download \
     -F "${url}"
+}
+
+tiktok_test() {
+  need_root
+  ensure_env_defaults
+  url="${1:-}"
+  if [ -z "${url}" ]; then
+    read -r -p "TikTok URL / TikTok 链接: " url
+  fi
+  [ -n "${url}" ] || { echo "TikTok URL is required. / 必须输入 TikTok 链接。"; exit 1; }
+
+  python_bin="${APP_DIR}/.venv/bin/python"
+  cookie_path="$(env_value COOKIES_FILE_TIKTOK)"
+  echo "== TikTok VPS diagnostic / TikTok VPS 诊断 =="
+  echo "URL: ${url}"
+  echo "App version / 程序版本: ${APP_VERSION}"
+  printf 'yt-dlp version / yt-dlp 版本: '
+  "${python_bin}" -m yt_dlp --version
+  echo "Cookie file / Cookie 文件: ${cookie_path:-not configured / 未配置}"
+  if [ -n "${cookie_path}" ] && [ -f "${cookie_path}" ]; then
+    ls -lh "${cookie_path}"
+    rows="$(grep -Ei '(^|[[:space:]])\.?(tiktok)\.com[[:space:]]' "${cookie_path}" | wc -l | tr -d ' ')"
+    echo "TikTok cookie rows / TikTok cookie 行数: ${rows}"
+    cookie_args=(--cookies "${cookie_path}")
+  else
+    echo "TikTok cookies unavailable / TikTok cookies 不存在"
+    cookie_args=()
+  fi
+  echo
+  echo "== Probe 1: normal request / 普通请求 =="
+  "${python_bin}" -m yt_dlp --ignore-config --no-playlist --skip-download -F \
+    "${cookie_args[@]}" "${url}" || true
+  echo
+  echo "== Probe 2: Chrome impersonation / Chrome 浏览器模拟 =="
+  "${python_bin}" -m yt_dlp --ignore-config --no-playlist --skip-download --impersonate chrome -F \
+    "${cookie_args[@]}" "${url}" || true
+  echo
+  echo "== Probe 3: TikTok mobile API / TikTok 移动 API =="
+  "${python_bin}" -m yt_dlp --ignore-config --no-playlist --skip-download -F \
+    --extractor-args 'tiktok:api_hostname=api22-normal-c-alisg.tiktokv.com;device_id=7291234567890123456' \
+    "${cookie_args[@]}" "${url}" || true
 }
 
 cookie_file_status() {
@@ -825,6 +867,9 @@ run() {
     ytdlp-version|yt-dlp-version)
       "${APP_DIR}/.venv/bin/python" -m yt_dlp --version
       ;;
+    tiktok-test|test-tiktok|tiktok-diagnose)
+      tiktok_test "${2:-}"
+      ;;
     js-runtime-install|js-install|deno-install)
       install_js_runtime
       ;;
@@ -1023,7 +1068,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1551,7 +1596,7 @@ async function promptDetectedUrl(rawUrl, reason = "", token = 0) {
   if (token) promptedWatchToken = token;
   lastPromptedUrl = url;
   lastPromptAt = now;
-  if (token) clipboardWatchToken++;
+  clipboardWatchToken++;
   try {
     const ok = window.confirm("Send this video to TG Relay?\n\n" + url);
     if (ok) chrome.runtime.sendMessage({ type: "submit-url", url });
