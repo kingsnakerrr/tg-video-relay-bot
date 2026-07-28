@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v77"
+APP_VERSION="v78"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -1023,13 +1023,26 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.3.2",
+    "version": "1.4.0",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
     "background": {"service_worker": "background.js"},
     "action": {"default_title": "Send current page to TG Relay"},
     "content_scripts": [
+        {
+            "matches": [
+                "https://*.tiktok.com/*",
+                "https://tiktok.com/*",
+                "https://*.douyin.com/*",
+                "https://douyin.com/*",
+                "https://*.iesdouyin.com/*"
+            ],
+            "js": ["page-hook.js"],
+            "run_at": "document_start",
+            "world": "MAIN",
+            "all_frames": False
+        },
         {
             "matches": [
                 "https://x.com/*",
@@ -1125,8 +1138,10 @@ function isSupportedVideoUrl(url) {{
     if (host === "youtube.com" && (parsed.pathname === "/watch" || parsed.pathname.startsWith("/shorts/"))) return true;
     if (host === "youtu.be" && parsed.pathname.length > 1) return true;
     if ((host === "pornhub.com" || host.endsWith(".pornhub.com")) && (parsed.pathname === "/view_video.php" || parsed.pathname.startsWith("/embed/") || parsed.pathname.startsWith("/shorties/"))) return true;
-    if ((host === "tiktok.com" || host.endsWith(".tiktok.com")) && parsed.pathname.length > 1) return true;
-    if ((host === "douyin.com" || host.endsWith(".douyin.com") || host === "iesdouyin.com" || host.endsWith(".iesdouyin.com")) && parsed.pathname.length > 1) return true;
+    if ((host === "vm.tiktok.com" || host === "vt.tiktok.com") && parsed.pathname.length > 1) return true;
+    if ((host === "tiktok.com" || host.endsWith(".tiktok.com")) && /^\/@[^/]+\/video\/\d+/.test(parsed.pathname)) return true;
+    if (host === "v.douyin.com" && parsed.pathname.length > 1) return true;
+    if ((host === "douyin.com" || host.endsWith(".douyin.com") || host === "iesdouyin.com" || host.endsWith(".iesdouyin.com")) && /^\/video\/\d+/.test(parsed.pathname)) return true;
   }} catch {{}}
   return false;
 }}
@@ -1231,8 +1246,10 @@ async function getUrlFromTab(tab, promptIfMissing = false) {{
             if (host === "youtube.com" && (parsed.pathname === "/watch" || parsed.pathname.startsWith("/shorts/"))) return true;
             if (host === "youtu.be" && parsed.pathname.length > 1) return true;
             if ((host === "pornhub.com" || host.endsWith(".pornhub.com")) && (parsed.pathname === "/view_video.php" || parsed.pathname.startsWith("/embed/") || parsed.pathname.startsWith("/shorties/"))) return true;
-            if ((host === "tiktok.com" || host.endsWith(".tiktok.com")) && parsed.pathname.length > 1) return true;
-            if ((host === "douyin.com" || host.endsWith(".douyin.com") || host === "iesdouyin.com" || host.endsWith(".iesdouyin.com")) && parsed.pathname.length > 1) return true;
+            if ((host === "vm.tiktok.com" || host === "vt.tiktok.com") && parsed.pathname.length > 1) return true;
+            if ((host === "tiktok.com" || host.endsWith(".tiktok.com")) && /^\/@[^/]+\/video\/\d+/.test(parsed.pathname)) return true;
+            if (host === "v.douyin.com" && parsed.pathname.length > 1) return true;
+            if ((host === "douyin.com" || host.endsWith(".douyin.com") || host === "iesdouyin.com" || host.endsWith(".iesdouyin.com")) && /^\/video\/\d+/.test(parsed.pathname)) return true;
           }} catch {{}}
           return false;
         }}
@@ -1290,6 +1307,9 @@ async function injectIntoOpenVideoTabs() {{
   for (const tab of tabs) {{
     if (!tab.id) continue;
     try {{
+      await chrome.scripting.executeScript({{ target: {{ tabId: tab.id }}, files: ["page-hook.js"], world: "MAIN" }});
+    }} catch (error) {{}}
+    try {{
       await chrome.scripting.executeScript({{ target: {{ tabId: tab.id }}, files: ["content.js"] }});
     }} catch (error) {{}}
   }}
@@ -1329,6 +1349,67 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {{
 }});
 '''
 (extension_dir / "background.js").write_text(background, encoding="utf-8")
+
+page_hook = r'''if (!globalThis.__tgRelayPageHookLoaded) {
+globalThis.__tgRelayPageHookLoaded = true;
+
+const MESSAGE_SOURCE = "tg-video-relay-page-hook";
+
+function emitCopiedText(value) {
+  const text = String(value || "").trim();
+  if (!text) return;
+  window.postMessage({ source: MESSAGE_SOURCE, type: "copied-text", text }, location.origin);
+}
+
+function selectedText() {
+  const active = document.activeElement;
+  if (active && typeof active.value === "string") {
+    const start = Number.isInteger(active.selectionStart) ? active.selectionStart : 0;
+    const end = Number.isInteger(active.selectionEnd) ? active.selectionEnd : active.value.length;
+    const value = active.value.slice(start, end).trim();
+    if (value) return value;
+  }
+  return String(window.getSelection ? window.getSelection() : "").trim();
+}
+
+try {
+  const clipboard = navigator.clipboard;
+  if (clipboard && typeof clipboard.writeText === "function") {
+    const originalWriteText = clipboard.writeText.bind(clipboard);
+    clipboard.writeText = function(value) {
+      emitCopiedText(value);
+      return originalWriteText(value);
+    };
+  }
+  if (clipboard && typeof clipboard.write === "function") {
+    const originalWrite = clipboard.write.bind(clipboard);
+    clipboard.write = function(items) {
+      Promise.resolve().then(async () => {
+        for (const item of items || []) {
+          if (!item || !item.types || !item.types.includes("text/plain")) continue;
+          try {
+            const blob = await item.getType("text/plain");
+            emitCopiedText(await blob.text());
+          } catch {}
+        }
+      });
+      return originalWrite(items);
+    };
+  }
+} catch {}
+
+try {
+  const originalExecCommand = document.execCommand.bind(document);
+  document.execCommand = function(command, ...args) {
+    const isCopy = String(command || "").toLowerCase() === "copy";
+    const before = isCopy ? selectedText() : "";
+    const result = originalExecCommand(command, ...args);
+    if (isCopy) queueMicrotask(() => emitCopiedText(before || selectedText()));
+    return result;
+  };
+} catch {}
+}'''
+(extension_dir / "page-hook.js").write_text(page_hook, encoding="utf-8")
 
 content = r'''if (!globalThis.__tgRelayContentLoaded) {
 globalThis.__tgRelayContentLoaded = true;
@@ -1388,8 +1469,10 @@ function isSupportedVideoUrl(url) {
     if (host === "youtube.com" && (parsed.pathname === "/watch" || parsed.pathname.startsWith("/shorts/"))) return true;
     if (host === "youtu.be" && parsed.pathname.length > 1) return true;
     if ((host === "pornhub.com" || host.endsWith(".pornhub.com")) && (parsed.pathname === "/view_video.php" || parsed.pathname.startsWith("/embed/") || parsed.pathname.startsWith("/shorties/"))) return true;
-    if ((host === "tiktok.com" || host.endsWith(".tiktok.com")) && parsed.pathname.length > 1) return true;
-    if ((host === "douyin.com" || host.endsWith(".douyin.com") || host === "iesdouyin.com" || host.endsWith(".iesdouyin.com")) && parsed.pathname.length > 1) return true;
+    if ((host === "vm.tiktok.com" || host === "vt.tiktok.com") && parsed.pathname.length > 1) return true;
+    if ((host === "tiktok.com" || host.endsWith(".tiktok.com")) && /^\/@[^/]+\/video\/\d+/.test(parsed.pathname)) return true;
+    if (host === "v.douyin.com" && parsed.pathname.length > 1) return true;
+    if ((host === "douyin.com" || host.endsWith(".douyin.com") || host === "iesdouyin.com" || host.endsWith(".iesdouyin.com")) && /^\/video\/\d+/.test(parsed.pathname)) return true;
   } catch {}
   return false;
 }
@@ -1456,10 +1539,10 @@ async function isEnabled() {
   } catch { return true; }
 }
 
-async function maybePromptCopiedUrl(reason = "", token = 0) {
+async function promptDetectedUrl(rawUrl, reason = "", token = 0) {
   if (!(await isEnabled())) return;
   if (token && token === promptedWatchToken) return;
-  const url = await readClipboardVideoUrl();
+  const url = firstSupportedUrl([rawUrl, ...urlsFromText(rawUrl)]);
   const now = Date.now();
   if (!url) return;
   if (promptOpen) return;
@@ -1475,6 +1558,11 @@ async function maybePromptCopiedUrl(reason = "", token = 0) {
   } finally {
     promptOpen = false;
   }
+}
+
+async function maybePromptCopiedUrl(reason = "", token = 0) {
+  const url = await readClipboardVideoUrl();
+  if (url) await promptDetectedUrl(url, reason, token);
 }
 
 function watchClipboardForVideoUrl(reason = "") {
@@ -1507,7 +1595,15 @@ function isCopyLinkControl(target) {
 document.addEventListener("copy", () => { watchClipboardForVideoUrl("copy"); }, true);
 document.addEventListener("cut", () => { watchClipboardForVideoUrl("cut"); }, true);
 document.addEventListener("click", (event) => {
-  if (isCopyLinkControl(event.target)) watchClipboardForVideoUrl("copy-link-button");
+  if (!isCopyLinkControl(event.target)) return;
+  const directUrl = findContextVideoUrl(event.target);
+  const promptTimeBeforeClick = lastPromptAt;
+  watchClipboardForVideoUrl("copy-link-button");
+  setTimeout(() => {
+    if (lastPromptAt === promptTimeBeforeClick && directUrl) {
+      promptDetectedUrl(directUrl, "copy-link-page-fallback");
+    }
+  }, 700);
 }, true);
 document.addEventListener("contextmenu", (event) => {
   lastContextUrl = findContextVideoUrl(event.target);
@@ -1517,6 +1613,13 @@ document.addEventListener("keyup", (event) => {
     watchClipboardForVideoUrl("keyboard-copy");
   }
 }, true);
+
+window.addEventListener("message", (event) => {
+  if (event.source !== window || event.origin !== location.origin) return;
+  const data = event.data;
+  if (!data || data.source !== "tg-video-relay-page-hook" || data.type !== "copied-text") return;
+  promptDetectedUrl(String(data.text || ""), "page-clipboard-hook");
+});
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && message.type === "get-context-url") {
@@ -1559,7 +1662,7 @@ with zipfile.ZipFile(extension_zip, "w", zipfile.ZIP_DEFLATED) as archive:
         if path.is_file():
             archive.write(path, pathlib.Path(extension_dir.name) / path.relative_to(extension_dir))
 PY_CHROME_EXTENSION
-      chmod 600 "${extension_dir}/background.js" "${extension_dir}/content.js" "${extension_zip}" 2>/dev/null || true
+      chmod 600 "${extension_dir}/background.js" "${extension_dir}/content.js" "${extension_dir}/page-hook.js" "${extension_zip}" 2>/dev/null || true
       echo "Chrome right-click extension generated / Chrome 右键扩展已生成"
       echo "Submit API enabled / 提交接口启用: ${enabled:-unknown}"
       echo

@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v78: Chrome now hooks the host page's real clipboard writes in the MAIN JavaScript world, so TikTok/Douyin copy buttons no longer depend on restricted clipboard reads.
+
 Update v77: Chrome clipboard parsing now extracts supported URLs from full share text, including Douyin descriptions containing `v.douyin.com` short links.
 
 Update v76: Chrome now detects TikTok/Douyin JavaScript copy/share buttons, tracking parameters are removed before downloading, and TikTok/Douyin anti-bot failures show actionable cookie guidance.
