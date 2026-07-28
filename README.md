@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v76: Chrome now detects TikTok/Douyin JavaScript copy/share buttons, tracking parameters are removed before downloading, and TikTok/Douyin anti-bot failures show actionable cookie guidance.
+
 Update v75: added complete TikTok/Douyin support for full and short links, independent cookies and sync URLs, Chrome copy/right-click submission, and Chrome fingerprint retries on VPS networks.
 
 TikTok and Douyin public videos are tried without cookies first. Login-only, age/region-restricted, private, CAPTCHA, or VPS-blocked videos may require separate Netscape cookie files:

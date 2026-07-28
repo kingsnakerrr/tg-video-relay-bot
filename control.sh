@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v75"
+APP_VERSION="v76"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -1023,7 +1023,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.3.0",
+    "version": "1.3.1",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1085,6 +1085,29 @@ function cleanUrl(url) {{
     if (parsed.hostname === "pornhub.com" || parsed.hostname.endsWith(".pornhub.com")) {{
       parsed.protocol = "https:";
       parsed.hostname = "www.pornhub.com";
+      return parsed.href;
+    }}
+    if (parsed.hostname === "tiktok.com" || parsed.hostname.endsWith(".tiktok.com")) {{
+      const videoMatch = parsed.pathname.match(/^\/@[^/]+\/video\/\d+/);
+      parsed.protocol = "https:";
+      if (videoMatch) {{
+        parsed.hostname = "www.tiktok.com";
+        parsed.pathname = videoMatch[0];
+      }}
+      parsed.search = "";
+      parsed.hash = "";
+      return parsed.href;
+    }}
+    if (parsed.hostname === "douyin.com" || parsed.hostname.endsWith(".douyin.com")
+        || parsed.hostname === "iesdouyin.com" || parsed.hostname.endsWith(".iesdouyin.com")) {{
+      const videoMatch = parsed.pathname.match(/^\/video\/\d+/);
+      parsed.protocol = "https:";
+      if (videoMatch) {{
+        parsed.hostname = "www.douyin.com";
+        parsed.pathname = videoMatch[0];
+      }}
+      parsed.search = "";
+      parsed.hash = "";
       return parsed.href;
     }}
     return parsed.href;
@@ -1172,6 +1195,29 @@ async function getUrlFromTab(tab, promptIfMissing = false) {{
             if (parsed.hostname === "pornhub.com" || parsed.hostname.endsWith(".pornhub.com")) {{
               parsed.protocol = "https:";
               parsed.hostname = "www.pornhub.com";
+              return parsed.href;
+            }}
+            if (parsed.hostname === "tiktok.com" || parsed.hostname.endsWith(".tiktok.com")) {{
+              const videoMatch = parsed.pathname.match(/^\/@[^/]+\/video\/\d+/);
+              parsed.protocol = "https:";
+              if (videoMatch) {{
+                parsed.hostname = "www.tiktok.com";
+                parsed.pathname = videoMatch[0];
+              }}
+              parsed.search = "";
+              parsed.hash = "";
+              return parsed.href;
+            }}
+            if (parsed.hostname === "douyin.com" || parsed.hostname.endsWith(".douyin.com")
+                || parsed.hostname === "iesdouyin.com" || parsed.hostname.endsWith(".iesdouyin.com")) {{
+              const videoMatch = parsed.pathname.match(/^\/video\/\d+/);
+              parsed.protocol = "https:";
+              if (videoMatch) {{
+                parsed.hostname = "www.douyin.com";
+                parsed.pathname = videoMatch[0];
+              }}
+              parsed.search = "";
+              parsed.hash = "";
               return parsed.href;
             }}
             return parsed.href;
@@ -1299,6 +1345,29 @@ function normalizeUrl(raw) {
       parsed.hostname = "www.pornhub.com";
       return parsed.href;
     }
+    if (parsed.hostname === "tiktok.com" || parsed.hostname.endsWith(".tiktok.com")) {
+      const videoMatch = parsed.pathname.match(/^\/@[^/]+\/video\/\d+/);
+      parsed.protocol = "https:";
+      if (videoMatch) {
+        parsed.hostname = "www.tiktok.com";
+        parsed.pathname = videoMatch[0];
+      }
+      parsed.search = "";
+      parsed.hash = "";
+      return parsed.href;
+    }
+    if (parsed.hostname === "douyin.com" || parsed.hostname.endsWith(".douyin.com")
+        || parsed.hostname === "iesdouyin.com" || parsed.hostname.endsWith(".iesdouyin.com")) {
+      const videoMatch = parsed.pathname.match(/^\/video\/\d+/);
+      parsed.protocol = "https:";
+      if (videoMatch) {
+        parsed.hostname = "www.douyin.com";
+        parsed.pathname = videoMatch[0];
+      }
+      parsed.search = "";
+      parsed.hash = "";
+      return parsed.href;
+    }
     return parsed.href;
   } catch { return String(raw || ""); }
 }
@@ -1407,8 +1476,27 @@ function watchClipboardForVideoUrl(reason = "") {
   }
 }
 
+function isCopyLinkControl(target) {
+  const element = target && target.nodeType === Node.ELEMENT_NODE ? target : target && target.parentElement;
+  if (!element || !element.closest) return false;
+  const control = element.closest("button,[role='button'],a,[data-e2e],[aria-label],[title]");
+  if (!control) return false;
+  const description = [
+    control.textContent,
+    control.getAttribute("aria-label"),
+    control.getAttribute("title"),
+    control.getAttribute("data-e2e"),
+    control.getAttribute("data-testid"),
+    control.className,
+  ].filter(Boolean).join(" ").toLowerCase();
+  return /copy[\s_-]*link|copylink|\u590d\u5236\u94fe\u63a5|\u8907\u88fd\u9023\u7d50/.test(description);
+}
+
 document.addEventListener("copy", () => { watchClipboardForVideoUrl("copy"); }, true);
 document.addEventListener("cut", () => { watchClipboardForVideoUrl("cut"); }, true);
+document.addEventListener("click", (event) => {
+  if (isCopyLinkControl(event.target)) watchClipboardForVideoUrl("copy-link-button");
+}, true);
 document.addEventListener("contextmenu", (event) => {
   lastContextUrl = findContextVideoUrl(event.target);
 }, true);

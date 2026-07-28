@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import shutil
 import uuid
 from dataclasses import dataclass
@@ -58,6 +59,21 @@ def _canonicalize_platform_url(url: str) -> str:
     hostname = (parsed.hostname or "").lower()
     if hostname == "pornhub.com" or hostname.endswith(".pornhub.com"):
         return urlunsplit(("https", "www.pornhub.com", parsed.path, parsed.query, parsed.fragment))
+    if hostname == "tiktok.com" or hostname.endswith(".tiktok.com"):
+        video_match = re.match(r"^/@[^/]+/video/\d+", parsed.path)
+        if video_match:
+            return urlunsplit(("https", "www.tiktok.com", video_match.group(0), "", ""))
+        return urlunsplit(("https", parsed.netloc, parsed.path, "", ""))
+    if (
+        hostname == "douyin.com"
+        or hostname.endswith(".douyin.com")
+        or hostname == "iesdouyin.com"
+        or hostname.endswith(".iesdouyin.com")
+    ):
+        video_match = re.match(r"^/video/\d+", parsed.path)
+        if video_match:
+            return urlunsplit(("https", "www.douyin.com", video_match.group(0), "", ""))
+        return urlunsplit(("https", parsed.netloc, parsed.path, "", ""))
     return url
 
 
@@ -141,6 +157,37 @@ def _friendly_download_error(url: str, message: str) -> str:
         return (
             "Pornhub requires a browser session for this video. Export Netscape cookies to "
             "cookies_pornhub.txt, set COOKIES_FILE_PORNHUB, then restart the bot."
+        )
+    if kind == "tiktok" and any(
+        marker in lowered
+        for marker in (
+            "unexpected response from webpage request",
+            "unable to extract webpage video data",
+            "unable to extract universal data",
+            "login required",
+            "sign in",
+        )
+    ):
+        return (
+            "TikTok returned a login/anti-bot page instead of video data. Run `x ytdlp-update` and "
+            "`x restart` first. If it still fails, export logged-in TikTok Netscape cookies to "
+            "cookies_tiktok.txt, set COOKIES_FILE_TIKTOK, then run `x cookies-test` and `x restart`. "
+            "A different VPS IP/region may be required when TikTok blocks the server IP."
+        )
+    if kind == "douyin" and any(
+        marker in lowered
+        for marker in (
+            "unexpected response from webpage request",
+            "unable to extract webpage video data",
+            "unable to extract universal data",
+            "login required",
+            "sign in",
+        )
+    ):
+        return (
+            "Douyin returned a login/anti-bot page instead of video data. Run `x ytdlp-update` and "
+            "`x restart` first. If it still fails, export logged-in Douyin Netscape cookies to "
+            "cookies_douyin.txt, set COOKIES_FILE_DOUYIN, then run `x cookies-test` and `x restart`."
         )
     return message
 
