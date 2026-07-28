@@ -55,6 +55,10 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[s
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    handler.send_header("Access-Control-Allow-Headers", "Content-Type, X-Submit-Secret")
+    handler.send_header("Access-Control-Allow-Private-Network", "true")
     handler.send_header("Connection", "close")
     handler.end_headers()
     handler.wfile.write(body)
@@ -138,6 +142,9 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
 
         def log_message(self, fmt: str, *args: Any) -> None:
             logging.info("submit-api %s - %s", self.address_string(), fmt % args)
+
+        def do_OPTIONS(self) -> None:
+            _json_response(self, 200, {"ok": True})
 
         def do_GET(self) -> None:
             parsed = urlparse(self.path)

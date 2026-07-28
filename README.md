@@ -1,6 +1,6 @@
 # Telegram Video Relay Bot
 
-Update v80: Chrome catches stale extension contexts and asks for one page reload instead of throwing an uncaught error. The submit API also ignores the same URL submitted again within eight seconds.
+Update v81: the submit API returns browser CORS/private-network headers, and Chrome retries with an opaque request when a successful submission response cannot be read. Duplicate retries remain protected by the eight-second server deduplication window.
 
 Update v78: Chrome now hooks the host page's real clipboard writes in the MAIN JavaScript world, so TikTok/Douyin copy buttons no longer depend on restricted clipboard reads.
 

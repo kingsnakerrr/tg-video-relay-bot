@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v80"
+APP_VERSION="v81"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -1068,7 +1068,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.4.2",
+    "version": "1.4.3",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1221,7 +1221,20 @@ async function submitUrl(rawUrl) {{
     const submit = submitEndpoint();
     submit.searchParams.set("secret", SECRET);
     submit.searchParams.set("url", targetUrl);
-    const response = await fetch(submit.href, {{ method: "GET", cache: "no-store", credentials: "omit" }});
+    let response;
+    try {{
+      response = await fetch(submit.href, {{ method: "GET", cache: "no-store", credentials: "omit" }});
+    }} catch (firstError) {{
+      await fetch(submit.href, {{
+        method: "GET",
+        mode: "no-cors",
+        cache: "no-store",
+        credentials: "omit"
+      }});
+      mark("OK");
+      console.log("TG Relay submitted without readable response:", targetUrl);
+      return;
+    }}
     if (!response.ok) {{
       const text = await response.text().catch(() => "");
       throw new Error(text || response.statusText || String(response.status));
