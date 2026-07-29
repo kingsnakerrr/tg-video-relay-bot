@@ -266,6 +266,24 @@ def _youtube_client_sets(settings: Settings) -> list[list[str]]:
     return unique
 
 
+def _youtube_auto_download_client_sets(settings: Settings) -> list[list[str]]:
+    # The normal/default extractor often exposes the full DASH set on YouTube.
+    # Some forced clients only expose a playable 360p format; if that succeeds
+    # first, yt-dlp never reaches the higher-quality default client.
+    sets = [[]]
+    sets.extend(_youtube_client_sets(settings))
+
+    seen: set[tuple[str, ...]] = set()
+    unique: list[list[str]] = []
+    for clients in sets:
+        key = tuple(clients)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(clients)
+    return unique
+
+
 def _request_profiles(url: str) -> list[tuple[str, object | None]]:
     if _url_kind(url) not in {"pornhub", "tiktok", "douyin"} or ImpersonateTarget is None:
         return [("default", None)]
@@ -627,7 +645,14 @@ def download_video(url: str, settings: Settings, download_format: str | None = N
     allow_fallback = download_format is None or _url_kind(url) == "youtube"
     if allow_fallback and SAFE_FALLBACK_DOWNLOAD_FORMAT not in format_attempts:
         format_attempts.append(SAFE_FALLBACK_DOWNLOAD_FORMAT)
-    client_sets = _youtube_client_sets(settings) if _url_kind(url) == "youtube" else [[]]
+    if _url_kind(url) == "youtube":
+        client_sets = (
+            _youtube_auto_download_client_sets(settings)
+            if download_format is None
+            else _youtube_client_sets(settings)
+        )
+    else:
+        client_sets = [[]]
     request_profiles = _request_profiles(url)
 
     info: dict[str, object] | None = None

@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v86"
+APP_VERSION="v87"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -1080,7 +1080,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.4.5",
+    "version": "1.4.6",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1155,6 +1155,21 @@ function cleanUrl(url) {{
     if (parsed.hostname === "pornhub.com" || parsed.hostname.endsWith(".pornhub.com")) {{
       parsed.protocol = "https:";
       parsed.hostname = "www.pornhub.com";
+      return parsed.href;
+    }}
+    if (parsed.hostname === "youtube.com" || parsed.hostname.endsWith(".youtube.com")) {{
+      parsed.protocol = "https:";
+      parsed.hostname = "www.youtube.com";
+      if (parsed.pathname === "/watch" && parsed.searchParams.get("v")) {{
+        return "https://www.youtube.com/watch?v=" + encodeURIComponent(parsed.searchParams.get("v"));
+      }}
+      const shortsMatch = parsed.pathname.match(/^\/shorts\/([^/?#]+)/);
+      if (shortsMatch) return "https://www.youtube.com/shorts/" + encodeURIComponent(shortsMatch[1]);
+    }}
+    if (parsed.hostname === "youtu.be" && parsed.pathname.length > 1) {{
+      parsed.protocol = "https:";
+      parsed.search = "";
+      parsed.hash = "";
       return parsed.href;
     }}
     if (parsed.hostname === "tiktok.com" || parsed.hostname.endsWith(".tiktok.com")) {{
@@ -1284,6 +1299,21 @@ async function getUrlFromTab(tab, promptIfMissing = false) {{
             if (parsed.hostname === "pornhub.com" || parsed.hostname.endsWith(".pornhub.com")) {{
               parsed.protocol = "https:";
               parsed.hostname = "www.pornhub.com";
+              return parsed.href;
+            }}
+            if (parsed.hostname === "youtube.com" || parsed.hostname.endsWith(".youtube.com")) {{
+              parsed.protocol = "https:";
+              parsed.hostname = "www.youtube.com";
+              if (parsed.pathname === "/watch" && parsed.searchParams.get("v")) {{
+                return "https://www.youtube.com/watch?v=" + encodeURIComponent(parsed.searchParams.get("v"));
+              }}
+              const shortsMatch = parsed.pathname.match(/^\/shorts\/([^/?#]+)/);
+              if (shortsMatch) return "https://www.youtube.com/shorts/" + encodeURIComponent(shortsMatch[1]);
+            }}
+            if (parsed.hostname === "youtu.be" && parsed.pathname.length > 1) {{
+              parsed.protocol = "https:";
+              parsed.search = "";
+              parsed.hash = "";
               return parsed.href;
             }}
             if (parsed.hostname === "tiktok.com" || parsed.hostname.endsWith(".tiktok.com")) {{
@@ -1506,6 +1536,21 @@ function normalizeUrl(raw) {
     if (parsed.hostname === "pornhub.com" || parsed.hostname.endsWith(".pornhub.com")) {
       parsed.protocol = "https:";
       parsed.hostname = "www.pornhub.com";
+      return parsed.href;
+    }
+    if (parsed.hostname === "youtube.com" || parsed.hostname.endsWith(".youtube.com")) {
+      parsed.protocol = "https:";
+      parsed.hostname = "www.youtube.com";
+      if (parsed.pathname === "/watch" && parsed.searchParams.get("v")) {
+        return "https://www.youtube.com/watch?v=" + encodeURIComponent(parsed.searchParams.get("v"));
+      }
+      const shortsMatch = parsed.pathname.match(/^\/shorts\/([^/?#]+)/);
+      if (shortsMatch) return "https://www.youtube.com/shorts/" + encodeURIComponent(shortsMatch[1]);
+    }
+    if (parsed.hostname === "youtu.be" && parsed.pathname.length > 1) {
+      parsed.protocol = "https:";
+      parsed.search = "";
+      parsed.hash = "";
       return parsed.href;
     }
     if (parsed.hostname === "tiktok.com" || parsed.hostname.endsWith(".tiktok.com")) {
