@@ -109,6 +109,10 @@ class Settings:
     compress_min_video_kbps: int
     ytdlp_force_ipv4: bool
     ytdlp_http_chunk_size: int
+    ytdlp_proxy: str
+    ytdlp_proxy_tiktok: str
+    ytdlp_proxy_douyin: str
+    ytdlp_proxy_pornhub: str
     youtube_player_clients: list[str]
     cookies_file: Path | None
     cookies_file_x: Path | None
@@ -196,6 +200,10 @@ def load_settings() -> Settings:
         compress_min_video_kbps=_env_int("COMPRESS_MIN_VIDEO_KBPS", 60),
         ytdlp_force_ipv4=_env_bool("YTDLP_FORCE_IPV4", True),
         ytdlp_http_chunk_size=_env_size_bytes("YTDLP_HTTP_CHUNK_SIZE", 10 * 1024 * 1024),
+        ytdlp_proxy=os.getenv("YTDLP_PROXY", "").strip(),
+        ytdlp_proxy_tiktok=os.getenv("YTDLP_PROXY_TIKTOK", "").strip(),
+        ytdlp_proxy_douyin=os.getenv("YTDLP_PROXY_DOUYIN", "").strip(),
+        ytdlp_proxy_pornhub=os.getenv("YTDLP_PROXY_PORNHUB", "").strip(),
         youtube_player_clients=_split_csv(os.getenv("YOUTUBE_PLAYER_CLIENTS", "web,web_safari,ios,android")),
         cookies_file=cookies_file,
         cookies_file_x=cookies_file_x,

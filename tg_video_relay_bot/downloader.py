@@ -275,6 +275,16 @@ def _request_profiles(url: str) -> list[tuple[str, object | None]]:
     ]
 
 
+def _proxy_for_url(url: str, settings: Settings) -> str:
+    kind = _url_kind(url)
+    platform_proxy = {
+        "tiktok": settings.ytdlp_proxy_tiktok,
+        "douyin": settings.ytdlp_proxy_douyin,
+        "pornhub": settings.ytdlp_proxy_pornhub,
+    }.get(kind, "")
+    return platform_proxy or settings.ytdlp_proxy
+
+
 def _base_ytdlp_options(
     url: str,
     settings: Settings,
@@ -301,6 +311,9 @@ def _base_ytdlp_options(
         options["source_address"] = "0.0.0.0"
     if settings.ytdlp_http_chunk_size > 0:
         options["http_chunk_size"] = settings.ytdlp_http_chunk_size
+    proxy = _proxy_for_url(url, settings)
+    if proxy:
+        options["proxy"] = proxy
     if impersonate_target is not None:
         options["impersonate"] = impersonate_target
     if youtube_clients is None:

@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v83"
+APP_VERSION="v84"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -727,6 +727,10 @@ ensure_upload_env() {
   grep -q '^UPLOAD_RETRIES=' "${env_file}" || printf 'UPLOAD_RETRIES=3\n' >> "${env_file}"
   grep -q '^YTDLP_FORCE_IPV4=' "${env_file}" || printf 'YTDLP_FORCE_IPV4=true\n' >> "${env_file}"
   grep -q '^YTDLP_HTTP_CHUNK_SIZE=' "${env_file}" || printf 'YTDLP_HTTP_CHUNK_SIZE=10M\n' >> "${env_file}"
+  grep -q '^YTDLP_PROXY=' "${env_file}" || printf 'YTDLP_PROXY=\n' >> "${env_file}"
+  grep -q '^YTDLP_PROXY_TIKTOK=' "${env_file}" || printf 'YTDLP_PROXY_TIKTOK=\n' >> "${env_file}"
+  grep -q '^YTDLP_PROXY_DOUYIN=' "${env_file}" || printf 'YTDLP_PROXY_DOUYIN=\n' >> "${env_file}"
+  grep -q '^YTDLP_PROXY_PORNHUB=' "${env_file}" || printf 'YTDLP_PROXY_PORNHUB=\n' >> "${env_file}"
   grep -q '^YOUTUBE_PLAYER_CLIENTS=' "${env_file}" || printf 'YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android\n' >> "${env_file}"
   grep -q '^COOKIES_FILE_X=' "${env_file}" || printf 'COOKIES_FILE_X=%s/cookies_x.txt\n' "${APP_DIR}" >> "${env_file}"
   grep -q '^COOKIES_FILE_YOUTUBE=' "${env_file}" || printf 'COOKIES_FILE_YOUTUBE=%s/cookies_youtube.txt\n' "${APP_DIR}" >> "${env_file}"

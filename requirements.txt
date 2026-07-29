@@ -1,2 +1,3 @@
 requests>=2.31.0
 yt-dlp
+PySocks>=1.7.1
