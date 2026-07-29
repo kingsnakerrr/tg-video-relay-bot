@@ -11,7 +11,6 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from .config import Settings
-from .downloader import DownloadError, probe_resolutions
 from .jobs import JobQueue, VideoJob
 from .links import extract_urls
 
@@ -32,22 +31,10 @@ def _is_youtube_url(url: str) -> bool:
 def _highest_download_choice(url: str, settings: Settings) -> tuple[str | None, str | None]:
     if not _is_youtube_url(url):
         return None, None
-    try:
-        probe = probe_resolutions(url, settings)
-    except DownloadError as exc:
-        logging.warning("submit-api YouTube format probe failed: url=%s error=%s", url, exc)
-        return None, None
-    if not probe.choices:
-        logging.warning("submit-api YouTube format probe returned no choices: url=%s", url)
-        return None, None
-    choice = probe.choices[0]
-    logging.info(
-        "submit-api selected highest YouTube format: url=%s label=%s selector=%s",
-        url,
-        choice.label,
-        choice.format_selector,
-    )
-    return choice.format_selector, choice.label
+    # Chrome/iPhone submits should download the best format yt-dlp can actually
+    # fetch. Locking a probed YouTube format id can fail when another player
+    # client is needed for the real download.
+    return None, "最高可用"
 
 
 def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, Any]) -> None:

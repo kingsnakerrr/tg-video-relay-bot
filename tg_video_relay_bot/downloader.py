@@ -611,7 +611,7 @@ def download_video(url: str, settings: Settings, download_format: str | None = N
 
     selected_format = download_format or settings.download_format or DEFAULT_DOWNLOAD_FORMAT
     format_attempts = [selected_format]
-    allow_fallback = download_format is None
+    allow_fallback = download_format is None or _url_kind(url) == "youtube"
     if allow_fallback and SAFE_FALLBACK_DOWNLOAD_FORMAT not in format_attempts:
         format_attempts.append(SAFE_FALLBACK_DOWNLOAD_FORMAT)
     client_sets = _youtube_client_sets(settings) if _url_kind(url) == "youtube" else [[]]
