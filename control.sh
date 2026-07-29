@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v84"
+APP_VERSION="v85"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -1072,7 +1072,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.4.4",
+    "version": "1.4.5",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1676,10 +1676,6 @@ function isCopyLinkControl(target) {
 
 document.addEventListener("copy", () => { watchClipboardForVideoUrl("copy"); }, true);
 document.addEventListener("cut", () => { watchClipboardForVideoUrl("cut"); }, true);
-document.addEventListener("click", (event) => {
-  if (!isCopyLinkControl(event.target)) return;
-  watchClipboardForVideoUrl("copy-link-button");
-}, true);
 document.addEventListener("contextmenu", (event) => {
   lastContextUrl = findContextVideoUrl(event.target);
 }, true);

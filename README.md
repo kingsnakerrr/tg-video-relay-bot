@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v85: Chrome extension 1.4.5 removes the click-to-scan-clipboard listener, so normal YouTube video clicks cannot reopen an old copied URL prompt. Copy events, page clipboard writes, right-click submit, and extension-icon submit still work.
+
 Update v84: Chrome extension 1.4.4 no longer treats normal video clicks as copy actions, submit failures are logged as warnings instead of Chrome extension errors, YouTube Chrome/iPhone submits use yt-dlp's highest actually downloadable format, and optional per-platform yt-dlp proxies are available with `YTDLP_PROXY_TIKTOK`, `YTDLP_PROXY_DOUYIN`, and `YTDLP_PROXY_PORNHUB`.
 
 Update v81: the submit API returns browser CORS/private-network headers, and Chrome retries with an opaque request when a successful submission response cannot be read. Duplicate retries remain protected by the eight-second server deduplication window.
