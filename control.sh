@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v85"
+APP_VERSION="v86"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -359,6 +359,7 @@ tiktok_test() {
 
   python_bin="${APP_DIR}/.venv/bin/python"
   cookie_path="$(env_value COOKIES_FILE_TIKTOK)"
+  proxy_value="$(env_value YTDLP_PROXY_TIKTOK)"
   echo "== TikTok VPS diagnostic / TikTok VPS 诊断 =="
   echo "URL: ${url}"
   echo "App version / 程序版本: ${APP_VERSION}"
@@ -374,19 +375,26 @@ tiktok_test() {
     echo "TikTok cookies unavailable / TikTok cookies 不存在"
     cookie_args=()
   fi
+  if [ -n "${proxy_value}" ]; then
+    echo "TikTok proxy / TikTok proxy: ${proxy_value}"
+    proxy_args=(--proxy "${proxy_value}")
+  else
+    echo "TikTok proxy / TikTok proxy: not configured"
+    proxy_args=()
+  fi
   echo
   echo "== Probe 1: normal request / 普通请求 =="
   "${python_bin}" -m yt_dlp --ignore-config --no-playlist --skip-download -F \
-    "${cookie_args[@]}" "${url}" || true
+    "${proxy_args[@]}" "${cookie_args[@]}" "${url}" || true
   echo
   echo "== Probe 2: Chrome impersonation / Chrome 浏览器模拟 =="
   "${python_bin}" -m yt_dlp --ignore-config --no-playlist --skip-download --impersonate chrome -F \
-    "${cookie_args[@]}" "${url}" || true
+    "${proxy_args[@]}" "${cookie_args[@]}" "${url}" || true
   echo
   echo "== Probe 3: TikTok mobile API / TikTok 移动 API =="
   "${python_bin}" -m yt_dlp --ignore-config --no-playlist --skip-download -F \
     --extractor-args 'tiktok:api_hostname=api22-normal-c-alisg.tiktokv.com;device_id=7291234567890123456' \
-    "${cookie_args[@]}" "${url}" || true
+    "${proxy_args[@]}" "${cookie_args[@]}" "${url}" || true
 }
 
 cookie_file_status() {
