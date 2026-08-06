@@ -117,7 +117,16 @@ def _authorized(handler: BaseHTTPRequestHandler, values: dict[str, list[str]], s
         or _first(values, "secret")
         or _first(values, "token")
     )
-    return submitted == settings.submit_api_secret
+    submitted = submitted.strip()
+    expected = settings.submit_api_secret.strip()
+    if submitted != expected:
+        logging.warning(
+            "submit-api bad secret: submitted_length=%s expected_length=%s",
+            len(submitted),
+            len(expected),
+        )
+        return False
+    return True
 
 
 def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPRequestHandler]:

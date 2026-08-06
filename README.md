@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v90: Submit API now trims accidental spaces around the iPhone Shortcut secret and logs bad-secret length diagnostics.
+
 Update v89: Instagram audience-restricted errors now clearly tell you to use logged-in Instagram cookies.
 
 Update v88: Added Instagram reel/post/video support for Telegram links, Chrome right-click/copy submit, independent `cookies_instagram.txt`, optional `COOKIE_SYNC_URL_INSTAGRAM`, and optional `YTDLP_PROXY_INSTAGRAM`.
