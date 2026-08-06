@@ -185,6 +185,7 @@ def _admin_status_text(settings: Settings, job_queue: JobQueue) -> str:
         f"\nPornhub cookies：{settings.cookies_file_pornhub or '未设置'}"
         f"\nTikTok cookies：{settings.cookies_file_tiktok or '未设置'}"
         f"\n抖音 cookies：{settings.cookies_file_douyin or '未设置'}"
+        f"\nInstagram cookies：{settings.cookies_file_instagram or '未设置'}"
     )
 
 

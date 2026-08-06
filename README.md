@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v88: Added Instagram reel/post/video support for Telegram links, Chrome right-click/copy submit, independent `cookies_instagram.txt`, optional `COOKIE_SYNC_URL_INSTAGRAM`, and optional `YTDLP_PROXY_INSTAGRAM`.
+
 Update v87: YouTube Chrome/homepage submits now normalize card links to a clean `watch?v=...` or Shorts URL, and automatic YouTube downloads try yt-dlp's default full-format client first so homepage submissions do not stop at a low-resolution playable format.
 
 Update v85: Chrome extension 1.4.5 removes the click-to-scan-clipboard listener, so normal YouTube video clicks cannot reopen an old copied URL prompt. Copy events, page clipboard writes, right-click submit, and extension-icon submit still work.

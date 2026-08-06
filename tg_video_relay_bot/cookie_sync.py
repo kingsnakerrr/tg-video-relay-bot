@@ -150,6 +150,11 @@ def sync_cookies_if_needed(settings: Settings, *, force: bool = False) -> str | 
             raise CookieSyncError("COOKIE_SYNC_URL_DOUYIN is set, but COOKIES_FILE_DOUYIN is empty.")
         jobs.append((settings.cookie_sync_url_douyin, settings.cookies_file_douyin, "Douyin"))
 
+    if settings.cookie_sync_url_instagram:
+        if settings.cookies_file_instagram is None:
+            raise CookieSyncError("COOKIE_SYNC_URL_INSTAGRAM is set, but COOKIES_FILE_INSTAGRAM is empty.")
+        jobs.append((settings.cookie_sync_url_instagram, settings.cookies_file_instagram, "Instagram"))
+
     if not jobs and settings.cookie_sync_url:
         if settings.cookies_file_x is not None:
             cookies_file = settings.cookies_file_x

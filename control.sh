@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v87"
+APP_VERSION="v88"
 APP_DIR="${APP_DIR:-/opt/tg-video-relay-bot}"
 REPO_URL="${REPO_URL:-https://github.com/kingsnakerrr/tg-video-relay-bot.git}"
 BRANCH="${BRANCH:-main}"
@@ -435,6 +435,7 @@ test_all_cookies() {
   cookie_file_status "Pornhub" "$(env_value COOKIES_FILE_PORNHUB)" '(^|[[:space:]])\.?(pornhub)\.com[[:space:]]'
   cookie_file_status "TikTok" "$(env_value COOKIES_FILE_TIKTOK)" '(^|[[:space:]])\.?(tiktok)\.com[[:space:]]'
   cookie_file_status "Douyin" "$(env_value COOKIES_FILE_DOUYIN)" '(^|[[:space:]])\.?(douyin|iesdouyin)\.com[[:space:]]'
+  cookie_file_status "Instagram" "$(env_value COOKIES_FILE_INSTAGRAM)" '(^|[[:space:]])\.?(instagram)\.com[[:space:]]'
 }
 
 cookie_sync_config() {
@@ -457,6 +458,8 @@ cookie_sync_config() {
   echo "  COOKIE_SYNC_URL_TIKTOK=$(env_value COOKIE_SYNC_URL_TIKTOK)"
   echo "  COOKIES_FILE_DOUYIN=$(env_value COOKIES_FILE_DOUYIN)"
   echo "  COOKIE_SYNC_URL_DOUYIN=$(env_value COOKIE_SYNC_URL_DOUYIN)"
+  echo "  COOKIES_FILE_INSTAGRAM=$(env_value COOKIES_FILE_INSTAGRAM)"
+  echo "  COOKIE_SYNC_URL_INSTAGRAM=$(env_value COOKIE_SYNC_URL_INSTAGRAM)"
   echo "  COOKIE_SYNC_INTERVAL_MINUTES=$(env_value COOKIE_SYNC_INTERVAL_MINUTES)"
   echo
   echo "Google Drive share links like /file/d/.../view are OK; the program converts them automatically."
@@ -491,6 +494,12 @@ cookie_sync_config() {
   if [[ "${change_douyin}" =~ ^[Yy]$ ]]; then
     read -r -p "New Douyin cookies sync link, empty to clear / 新抖音 cookies 直链，留空删除: " new_douyin
     set_env_value "${env_file}" COOKIE_SYNC_URL_DOUYIN "${new_douyin}"
+  fi
+
+  read -r -p "Change Instagram cookies sync link? [y/N]: " change_instagram
+  if [[ "${change_instagram}" =~ ^[Yy]$ ]]; then
+    read -r -p "New Instagram cookies sync link, empty to clear: " new_instagram
+    set_env_value "${env_file}" COOKIE_SYNC_URL_INSTAGRAM "${new_instagram}"
   fi
 
   current_interval="$(env_value COOKIE_SYNC_INTERVAL_MINUTES)"
@@ -739,18 +748,21 @@ ensure_upload_env() {
   grep -q '^YTDLP_PROXY_TIKTOK=' "${env_file}" || printf 'YTDLP_PROXY_TIKTOK=\n' >> "${env_file}"
   grep -q '^YTDLP_PROXY_DOUYIN=' "${env_file}" || printf 'YTDLP_PROXY_DOUYIN=\n' >> "${env_file}"
   grep -q '^YTDLP_PROXY_PORNHUB=' "${env_file}" || printf 'YTDLP_PROXY_PORNHUB=\n' >> "${env_file}"
+  grep -q '^YTDLP_PROXY_INSTAGRAM=' "${env_file}" || printf 'YTDLP_PROXY_INSTAGRAM=\n' >> "${env_file}"
   grep -q '^YOUTUBE_PLAYER_CLIENTS=' "${env_file}" || printf 'YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android\n' >> "${env_file}"
   grep -q '^COOKIES_FILE_X=' "${env_file}" || printf 'COOKIES_FILE_X=%s/cookies_x.txt\n' "${APP_DIR}" >> "${env_file}"
   grep -q '^COOKIES_FILE_YOUTUBE=' "${env_file}" || printf 'COOKIES_FILE_YOUTUBE=%s/cookies_youtube.txt\n' "${APP_DIR}" >> "${env_file}"
   grep -q '^COOKIES_FILE_PORNHUB=' "${env_file}" || printf 'COOKIES_FILE_PORNHUB=%s/cookies_pornhub.txt\n' "${APP_DIR}" >> "${env_file}"
   grep -q '^COOKIES_FILE_TIKTOK=' "${env_file}" || printf 'COOKIES_FILE_TIKTOK=%s/cookies_tiktok.txt\n' "${APP_DIR}" >> "${env_file}"
   grep -q '^COOKIES_FILE_DOUYIN=' "${env_file}" || printf 'COOKIES_FILE_DOUYIN=%s/cookies_douyin.txt\n' "${APP_DIR}" >> "${env_file}"
+  grep -q '^COOKIES_FILE_INSTAGRAM=' "${env_file}" || printf 'COOKIES_FILE_INSTAGRAM=%s/cookies_instagram.txt\n' "${APP_DIR}" >> "${env_file}"
   grep -q '^COOKIE_SYNC_URL=' "${env_file}" || printf 'COOKIE_SYNC_URL=\n' >> "${env_file}"
   grep -q '^COOKIE_SYNC_URL_X=' "${env_file}" || printf 'COOKIE_SYNC_URL_X=\n' >> "${env_file}"
   grep -q '^COOKIE_SYNC_URL_YOUTUBE=' "${env_file}" || printf 'COOKIE_SYNC_URL_YOUTUBE=\n' >> "${env_file}"
   grep -q '^COOKIE_SYNC_URL_PORNHUB=' "${env_file}" || printf 'COOKIE_SYNC_URL_PORNHUB=\n' >> "${env_file}"
   grep -q '^COOKIE_SYNC_URL_TIKTOK=' "${env_file}" || printf 'COOKIE_SYNC_URL_TIKTOK=\n' >> "${env_file}"
   grep -q '^COOKIE_SYNC_URL_DOUYIN=' "${env_file}" || printf 'COOKIE_SYNC_URL_DOUYIN=\n' >> "${env_file}"
+  grep -q '^COOKIE_SYNC_URL_INSTAGRAM=' "${env_file}" || printf 'COOKIE_SYNC_URL_INSTAGRAM=\n' >> "${env_file}"
   grep -q '^COOKIE_SYNC_INTERVAL_MINUTES=' "${env_file}" || printf 'COOKIE_SYNC_INTERVAL_MINUTES=360\n' >> "${env_file}"
   if [ "$(env_value COOKIES_FILE)" = "${APP_DIR}/cookies.txt" ]; then
     set_env_value "${env_file}" COOKIES_FILE ""
@@ -840,6 +852,7 @@ run() {
       printf 'COOKIES_FILE_PORNHUB=%s\n' "$(env_value COOKIES_FILE_PORNHUB)"
       printf 'COOKIES_FILE_TIKTOK=%s\n' "$(env_value COOKIES_FILE_TIKTOK)"
       printf 'COOKIES_FILE_DOUYIN=%s\n' "$(env_value COOKIES_FILE_DOUYIN)"
+      printf 'COOKIES_FILE_INSTAGRAM=%s\n' "$(env_value COOKIES_FILE_INSTAGRAM)"
       printf 'COOKIES_FILE=%s\n' "$(env_value COOKIES_FILE)"
       [ -n "$(env_value COOKIE_SYNC_URL_X)" ] && echo "COOKIE_SYNC_URL_X=set / 已设置" || echo "COOKIE_SYNC_URL_X=empty / 未设置"
       [ -n "$(env_value COOKIE_SYNC_URL_YOUTUBE)" ] && echo "COOKIE_SYNC_URL_YOUTUBE=set / 已设置" || echo "COOKIE_SYNC_URL_YOUTUBE=empty / 未设置"
@@ -1080,7 +1093,7 @@ extension_dir.mkdir(parents=True, exist_ok=True)
 manifest = {
     "manifest_version": 3,
     "name": "TG Video Relay Sender",
-    "version": "1.4.6",
+    "version": "1.4.7",
     "description": "Right-click a page or link and send it to Telegram Video Relay.",
     "permissions": ["contextMenus", "activeTab", "tabs", "storage", "clipboardRead", "scripting"],
     "host_permissions": [host_permission],
@@ -1093,7 +1106,11 @@ manifest = {
                 "https://tiktok.com/*",
                 "https://*.douyin.com/*",
                 "https://douyin.com/*",
-                "https://*.iesdouyin.com/*"
+                "https://*.iesdouyin.com/*",
+                "https://instagram.com/*",
+                "https://www.instagram.com/*",
+                "https://*.instagram.com/*",
+                "https://instagr.am/*"
             ],
             "js": ["page-hook.js"],
             "run_at": "document_start",
@@ -1116,7 +1133,11 @@ manifest = {
                 "https://tiktok.com/*",
                 "https://*.douyin.com/*",
                 "https://douyin.com/*",
-                "https://*.iesdouyin.com/*"
+                "https://*.iesdouyin.com/*",
+                "https://instagram.com/*",
+                "https://www.instagram.com/*",
+                "https://*.instagram.com/*",
+                "https://instagr.am/*"
             ],
             "js": ["content.js"],
             "run_at": "document_idle",
@@ -1155,6 +1176,15 @@ function cleanUrl(url) {{
     if (parsed.hostname === "pornhub.com" || parsed.hostname.endsWith(".pornhub.com")) {{
       parsed.protocol = "https:";
       parsed.hostname = "www.pornhub.com";
+      return parsed.href;
+    }}
+    if (parsed.hostname === "instagram.com" || parsed.hostname.endsWith(".instagram.com") || parsed.hostname === "instagr.am") {{
+      const mediaMatch = parsed.pathname.match(/^\/(reel|p|tv)\/([^/?#]+)/);
+      parsed.protocol = "https:";
+      parsed.hostname = "www.instagram.com";
+      if (mediaMatch) return "https://www.instagram.com/" + mediaMatch[1] + "/" + encodeURIComponent(mediaMatch[2]) + "/";
+      parsed.search = "";
+      parsed.hash = "";
       return parsed.href;
     }}
     if (parsed.hostname === "youtube.com" || parsed.hostname.endsWith(".youtube.com")) {{
@@ -1214,6 +1244,7 @@ function isSupportedVideoUrl(url) {{
     if ((host === "tiktok.com" || host.endsWith(".tiktok.com")) && /^\/@[^/]+\/video\/\d+/.test(parsed.pathname)) return true;
     if (host === "v.douyin.com" && parsed.pathname.length > 1) return true;
     if ((host === "douyin.com" || host.endsWith(".douyin.com") || host === "iesdouyin.com" || host.endsWith(".iesdouyin.com")) && /^\/video\/\d+/.test(parsed.pathname)) return true;
+    if ((host === "instagram.com" || host === "instagr.am" || host.endsWith(".instagram.com")) && /^\/(reel|p|tv)\/[^/]+/.test(parsed.pathname)) return true;
   }} catch {{}}
   return false;
 }}
@@ -1301,6 +1332,15 @@ async function getUrlFromTab(tab, promptIfMissing = false) {{
               parsed.hostname = "www.pornhub.com";
               return parsed.href;
             }}
+            if (parsed.hostname === "instagram.com" || parsed.hostname.endsWith(".instagram.com") || parsed.hostname === "instagr.am") {{
+              const mediaMatch = parsed.pathname.match(/^\/(reel|p|tv)\/([^/?#]+)/);
+              parsed.protocol = "https:";
+              parsed.hostname = "www.instagram.com";
+              if (mediaMatch) return "https://www.instagram.com/" + mediaMatch[1] + "/" + encodeURIComponent(mediaMatch[2]) + "/";
+              parsed.search = "";
+              parsed.hash = "";
+              return parsed.href;
+            }}
             if (parsed.hostname === "youtube.com" || parsed.hostname.endsWith(".youtube.com")) {{
               parsed.protocol = "https:";
               parsed.hostname = "www.youtube.com";
@@ -1354,6 +1394,7 @@ async function getUrlFromTab(tab, promptIfMissing = false) {{
             if ((host === "tiktok.com" || host.endsWith(".tiktok.com")) && /^\/@[^/]+\/video\/\d+/.test(parsed.pathname)) return true;
             if (host === "v.douyin.com" && parsed.pathname.length > 1) return true;
             if ((host === "douyin.com" || host.endsWith(".douyin.com") || host === "iesdouyin.com" || host.endsWith(".iesdouyin.com")) && /^\/video\/\d+/.test(parsed.pathname)) return true;
+            if ((host === "instagram.com" || host === "instagr.am" || host.endsWith(".instagram.com")) && /^\/(reel|p|tv)\/[^/]+/.test(parsed.pathname)) return true;
           }} catch {{}}
           return false;
         }}
@@ -1365,7 +1406,7 @@ async function getUrlFromTab(tab, promptIfMissing = false) {{
             if (supported(url)) return url;
           }}
           if (!promptIfMissingArg) return "";
-          const pasted = window.prompt("Paste an X, YouTube, TikTok, Douyin or Pornhub video URL:", "");
+          const pasted = window.prompt("Paste an X, YouTube, TikTok, Douyin, Pornhub or Instagram video URL:", "");
           const pastedCandidates = [String(pasted || ""), ...((String(pasted || "")).match(/https?:\/\/[^\s<>"']+/gi) || [])];
           for (const candidate of pastedCandidates) {{
             const pastedUrl = normalize(candidate.replace(/[，。！？、；：,.;:!?）)\]}}]+$/g, ""));
@@ -1374,7 +1415,7 @@ async function getUrlFromTab(tab, promptIfMissing = false) {{
           return "";
         }}).catch(() => {{
           if (!promptIfMissingArg) return "";
-          const pasted = window.prompt("Paste an X, YouTube, TikTok, Douyin or Pornhub video URL:", "");
+          const pasted = window.prompt("Paste an X, YouTube, TikTok, Douyin, Pornhub or Instagram video URL:", "");
           const pastedUrl = normalize(pasted || "");
           return supported(pastedUrl) ? pastedUrl : "";
         }});
@@ -1404,7 +1445,11 @@ async function injectIntoOpenVideoTabs() {{
     "https://*.pornhub.com/*",
     "https://*.tiktok.com/*",
     "https://*.douyin.com/*",
-    "https://*.iesdouyin.com/*"
+    "https://*.iesdouyin.com/*",
+    "https://instagram.com/*",
+    "https://www.instagram.com/*",
+    "https://*.instagram.com/*",
+    "https://instagr.am/*"
   ];
   let tabs = [];
   try {{ tabs = await chrome.tabs.query({{ url: patterns }}); }} catch (error) {{ return; }}
@@ -1538,6 +1583,15 @@ function normalizeUrl(raw) {
       parsed.hostname = "www.pornhub.com";
       return parsed.href;
     }
+    if (parsed.hostname === "instagram.com" || parsed.hostname.endsWith(".instagram.com") || parsed.hostname === "instagr.am") {
+      const mediaMatch = parsed.pathname.match(/^\/(reel|p|tv)\/([^/?#]+)/);
+      parsed.protocol = "https:";
+      parsed.hostname = "www.instagram.com";
+      if (mediaMatch) return "https://www.instagram.com/" + mediaMatch[1] + "/" + encodeURIComponent(mediaMatch[2]) + "/";
+      parsed.search = "";
+      parsed.hash = "";
+      return parsed.href;
+    }
     if (parsed.hostname === "youtube.com" || parsed.hostname.endsWith(".youtube.com")) {
       parsed.protocol = "https:";
       parsed.hostname = "www.youtube.com";
@@ -1592,6 +1646,7 @@ function isSupportedVideoUrl(url) {
     if ((host === "tiktok.com" || host.endsWith(".tiktok.com")) && /^\/@[^/]+\/video\/\d+/.test(parsed.pathname)) return true;
     if (host === "v.douyin.com" && parsed.pathname.length > 1) return true;
     if ((host === "douyin.com" || host.endsWith(".douyin.com") || host === "iesdouyin.com" || host.endsWith(".iesdouyin.com")) && /^\/video\/\d+/.test(parsed.pathname)) return true;
+    if ((host === "instagram.com" || host === "instagr.am" || host.endsWith(".instagram.com")) && /^\/(reel|p|tv)\/[^/]+/.test(parsed.pathname)) return true;
   } catch {}
   return false;
 }
@@ -1634,6 +1689,10 @@ function findContextVideoUrl(target) {
     const pornhubCard = element.closest('[class*="video"],[class*="thumb"],li');
     if (pornhubCard) {
       pornhubCard.querySelectorAll('a[href*="view_video.php"],a[href*="/shorties/"]').forEach((anchor) => add(anchor.href));
+    }
+    const instagramCard = element.closest("article,div,li");
+    if (instagramCard) {
+      instagramCard.querySelectorAll('a[href*="/reel/"],a[href*="/p/"],a[href*="/tv/"]').forEach((anchor) => add(anchor.href));
     }
     const shortVideoCard = element.closest('[data-e2e*="video"],[class*="video"],[class*="feed"],li');
     if (shortVideoCard) {
@@ -1753,7 +1812,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && (message.type === "get-clipboard-url" || message.type === "get-clipboard-or-prompt-url")) {
     readClipboardVideoUrl().then((url) => {
       if (!url && message.type === "get-clipboard-or-prompt-url") {
-        const pasted = window.prompt("Paste an X, YouTube, TikTok, Douyin or Pornhub video URL:", "");
+        const pasted = window.prompt("Paste an X, YouTube, TikTok, Douyin, Pornhub or Instagram video URL:", "");
         sendResponse({ url: firstSupportedUrl([pasted, ...urlsFromText(pasted)]) });
         return;
       }
@@ -1804,8 +1863,8 @@ PY_CHROME_EXTENSION
       echo "     打开 chrome://extensions，开启开发者模式。"
       echo "  3. Click Load unpacked and select the unzipped chrome-tg-relay-extension folder."
       echo "     点“加载已解压的扩展程序”，选择解压后的 chrome-tg-relay-extension 文件夹。"
-      echo "  4. Right-click an X/YouTube/TikTok/Douyin/Pornhub video or link and choose the TG Relay menu."
-      echo "     在 X、YouTube、TikTok、抖音或 Pornhub 视频/链接上右键，选择 TG Relay 提交下载。"
+      echo "  4. Right-click an X/YouTube/TikTok/Douyin/Pornhub/Instagram video or link and choose the TG Relay menu."
+      echo "     在 X、YouTube、TikTok、抖音、Pornhub 或 Instagram 视频/链接上右键，选择 TG Relay 提交下载。"
       ;;
     env|config)
       need_root

@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v81"
+APP_VERSION="v88"
 DEFAULT_APP_DIR="/opt/tg-video-relay-bot"
 APP_DIR_FROM_ENV="${APP_DIR:-}"
 APP_DIR="${APP_DIR:-${DEFAULT_APP_DIR}}"
@@ -12,7 +12,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 CONTROL_BIN="/usr/local/bin/x"
 ALT_CONTROL_BIN="/usr/local/bin/tg-video-relay"
-INSTALLER_VERSION="2026-07-28.7"
+INSTALLER_VERSION="2026-08-06.1"
 DENO_INSTALL_STATUS="skipped"
 DEFAULT_DOWNLOAD_FORMAT="bv*+ba/best"
 OLD_1080P_DOWNLOAD_FORMAT="bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/best"
@@ -269,6 +269,7 @@ if [ ! -f .env ]; then
   read -r -p "Optional X cookies sync link, press Enter to skip / 可选 X cookies 同步链接，回车跳过: " COOKIE_SYNC_URL_X
   read -r -p "Optional YouTube cookies sync link, press Enter to skip / 可选 YouTube cookies 同步链接，回车跳过: " COOKIE_SYNC_URL_YOUTUBE
   read -r -p "Optional TikTok cookies sync link, press Enter to skip: " COOKIE_SYNC_URL_TIKTOK
+  read -r -p "Optional Instagram cookies sync link, press Enter to skip: " COOKIE_SYNC_URL_INSTAGRAM
   read -r -p "Optional Douyin cookies sync link, press Enter to skip / 可选抖音 cookies 同步直链，回车跳过: " COOKIE_SYNC_URL_DOUYIN
   read -r -p "Optional Local Bot API ID, press Enter to skip / 可选 Local Bot API ID，回车跳过: " LOCAL_API_ID
   if [ -n "${LOCAL_API_ID}" ]; then
@@ -304,6 +305,11 @@ COMPRESS_AUDIO_KBPS=96
 COMPRESS_MIN_VIDEO_KBPS=60
 YTDLP_FORCE_IPV4=true
 YTDLP_HTTP_CHUNK_SIZE=10M
+YTDLP_PROXY=
+YTDLP_PROXY_TIKTOK=
+YTDLP_PROXY_DOUYIN=
+YTDLP_PROXY_PORNHUB=
+YTDLP_PROXY_INSTAGRAM=
 YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android
 COOKIES_FILE=
 COOKIES_FILE_X=${APP_DIR}/cookies_x.txt
@@ -311,12 +317,14 @@ COOKIES_FILE_YOUTUBE=${APP_DIR}/cookies_youtube.txt
 COOKIES_FILE_PORNHUB=${APP_DIR}/cookies_pornhub.txt
 COOKIES_FILE_TIKTOK=${APP_DIR}/cookies_tiktok.txt
 COOKIES_FILE_DOUYIN=${APP_DIR}/cookies_douyin.txt
+COOKIES_FILE_INSTAGRAM=${APP_DIR}/cookies_instagram.txt
 COOKIE_SYNC_URL=
 COOKIE_SYNC_URL_X=${COOKIE_SYNC_URL_X}
 COOKIE_SYNC_URL_YOUTUBE=${COOKIE_SYNC_URL_YOUTUBE}
 COOKIE_SYNC_URL_PORNHUB=
 COOKIE_SYNC_URL_TIKTOK=${COOKIE_SYNC_URL_TIKTOK}
 COOKIE_SYNC_URL_DOUYIN=${COOKIE_SYNC_URL_DOUYIN}
+COOKIE_SYNC_URL_INSTAGRAM=${COOKIE_SYNC_URL_INSTAGRAM}
 COOKIE_SYNC_INTERVAL_MINUTES=360
 UPLOAD_MODE=video
 DELETE_AFTER_ALL_UPLOADS=true
@@ -351,6 +359,11 @@ grep -q '^COMPRESS_MIN_VIDEO_KBPS=' .env || printf 'COMPRESS_MIN_VIDEO_KBPS=60\n
 grep -q '^UPLOAD_RETRIES=' .env || printf 'UPLOAD_RETRIES=3\n' >> .env
 grep -q '^YTDLP_FORCE_IPV4=' .env || printf 'YTDLP_FORCE_IPV4=true\n' >> .env
 grep -q '^YTDLP_HTTP_CHUNK_SIZE=' .env || printf 'YTDLP_HTTP_CHUNK_SIZE=10M\n' >> .env
+grep -q '^YTDLP_PROXY=' .env || printf 'YTDLP_PROXY=\n' >> .env
+grep -q '^YTDLP_PROXY_TIKTOK=' .env || printf 'YTDLP_PROXY_TIKTOK=\n' >> .env
+grep -q '^YTDLP_PROXY_DOUYIN=' .env || printf 'YTDLP_PROXY_DOUYIN=\n' >> .env
+grep -q '^YTDLP_PROXY_PORNHUB=' .env || printf 'YTDLP_PROXY_PORNHUB=\n' >> .env
+grep -q '^YTDLP_PROXY_INSTAGRAM=' .env || printf 'YTDLP_PROXY_INSTAGRAM=\n' >> .env
 grep -q '^YOUTUBE_PLAYER_CLIENTS=' .env || printf 'YOUTUBE_PLAYER_CLIENTS=web,web_safari,ios,android\n' >> .env
 grep -q '^TELEGRAM_RESOLUTION_MENU=' .env || printf 'TELEGRAM_RESOLUTION_MENU=true\n' >> .env
 grep -q '^TELEGRAM_RESOLUTION_AUTO_SECONDS=' .env || printf 'TELEGRAM_RESOLUTION_AUTO_SECONDS=3\n' >> .env
@@ -366,12 +379,14 @@ grep -q '^COOKIES_FILE_YOUTUBE=' .env || printf 'COOKIES_FILE_YOUTUBE=%s/cookies
 grep -q '^COOKIES_FILE_PORNHUB=' .env || printf 'COOKIES_FILE_PORNHUB=%s/cookies_pornhub.txt\n' "${APP_DIR}" >> .env
 grep -q '^COOKIES_FILE_TIKTOK=' .env || printf 'COOKIES_FILE_TIKTOK=%s/cookies_tiktok.txt\n' "${APP_DIR}" >> .env
 grep -q '^COOKIES_FILE_DOUYIN=' .env || printf 'COOKIES_FILE_DOUYIN=%s/cookies_douyin.txt\n' "${APP_DIR}" >> .env
+grep -q '^COOKIES_FILE_INSTAGRAM=' .env || printf 'COOKIES_FILE_INSTAGRAM=%s/cookies_instagram.txt\n' "${APP_DIR}" >> .env
 grep -q '^COOKIE_SYNC_URL=' .env || printf 'COOKIE_SYNC_URL=\n' >> .env
 grep -q '^COOKIE_SYNC_URL_X=' .env || printf 'COOKIE_SYNC_URL_X=\n' >> .env
 grep -q '^COOKIE_SYNC_URL_YOUTUBE=' .env || printf 'COOKIE_SYNC_URL_YOUTUBE=\n' >> .env
 grep -q '^COOKIE_SYNC_URL_PORNHUB=' .env || printf 'COOKIE_SYNC_URL_PORNHUB=\n' >> .env
 grep -q '^COOKIE_SYNC_URL_TIKTOK=' .env || printf 'COOKIE_SYNC_URL_TIKTOK=\n' >> .env
 grep -q '^COOKIE_SYNC_URL_DOUYIN=' .env || printf 'COOKIE_SYNC_URL_DOUYIN=\n' >> .env
+grep -q '^COOKIE_SYNC_URL_INSTAGRAM=' .env || printf 'COOKIE_SYNC_URL_INSTAGRAM=\n' >> .env
 grep -q '^COOKIE_SYNC_INTERVAL_MINUTES=' .env || printf 'COOKIE_SYNC_INTERVAL_MINUTES=360\n' >> .env
 grep -q '^SUBMIT_API_ENABLED=' .env || printf 'SUBMIT_API_ENABLED=true\n' >> .env
 grep -q '^SUBMIT_API_HOST=' .env || printf 'SUBMIT_API_HOST=0.0.0.0\n' >> .env
@@ -388,7 +403,7 @@ grep -q '^SUBMIT_NOTIFY_CHAT_ID=' .env || printf 'SUBMIT_NOTIFY_CHAT_ID=\n' >> .
 DOWNLOAD_DIR_CURRENT="$(grep -E '^DOWNLOAD_DIR=' .env | tail -n 1 | cut -d= -f2-)"
 [ -n "${DOWNLOAD_DIR_CURRENT}" ] || DOWNLOAD_DIR_CURRENT="${APP_DIR}/downloads"
 mkdir -p "${DOWNLOAD_DIR_CURRENT}"
-for cookie_file in "${APP_DIR}/cookies.txt" "${APP_DIR}/cookies_x.txt" "${APP_DIR}/cookies_youtube.txt" "${APP_DIR}/cookies_pornhub.txt" "${APP_DIR}/cookies_tiktok.txt" "${APP_DIR}/cookies_douyin.txt"; do
+for cookie_file in "${APP_DIR}/cookies.txt" "${APP_DIR}/cookies_x.txt" "${APP_DIR}/cookies_youtube.txt" "${APP_DIR}/cookies_pornhub.txt" "${APP_DIR}/cookies_tiktok.txt" "${APP_DIR}/cookies_douyin.txt" "${APP_DIR}/cookies_instagram.txt"; do
   [ -f "${cookie_file}" ] && chmod 600 "${cookie_file}"
 done
 

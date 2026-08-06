@@ -15,6 +15,8 @@ SUPPORTED_HOST_HINTS = (
     "twitter.com",
     "video.twimg.com",
     "pornhub.com",
+    "instagram.com",
+    "instagr.am",
 )
 
 DIRECT_MEDIA_EXTENSIONS = (

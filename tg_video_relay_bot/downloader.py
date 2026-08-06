@@ -59,6 +59,8 @@ def _canonicalize_platform_url(url: str) -> str:
     hostname = (parsed.hostname or "").lower()
     if hostname == "pornhub.com" or hostname.endswith(".pornhub.com"):
         return urlunsplit(("https", "www.pornhub.com", parsed.path, parsed.query, parsed.fragment))
+    if hostname == "instagram.com" or hostname.endswith(".instagram.com") or hostname == "instagr.am":
+        return urlunsplit(("https", "www.instagram.com", parsed.path, "", ""))
     if hostname == "tiktok.com" or hostname.endswith(".tiktok.com"):
         video_match = re.match(r"^/@[^/]+/video/\d+", parsed.path)
         if video_match:
@@ -89,6 +91,8 @@ def _url_kind(url: str) -> str:
         return "twitter"
     if "pornhub.com" in lowered:
         return "pornhub"
+    if "instagram.com" in lowered or "instagr.am" in lowered:
+        return "instagram"
     return "generic"
 
 
@@ -100,6 +104,7 @@ def _headers_for(url: str) -> dict[str, str]:
         "douyin": "https://www.douyin.com/",
         "twitter": "https://x.com/",
         "pornhub": "https://www.pornhub.com/",
+        "instagram": "https://www.instagram.com/",
     }
     return {
         "User-Agent": (
@@ -153,10 +158,32 @@ def _friendly_download_error(url: str, message: str) -> str:
                 "Pornhub returned HTTP 403 Forbidden. Run `x ytdlp-update` first. If it still fails, "
                 "export Netscape cookies to cookies_pornhub.txt, set COOKIES_FILE_PORNHUB, then restart."
             )
+        if kind == "instagram":
+            return (
+                "Instagram returned HTTP 403 Forbidden. Run `x ytdlp-update` first. If it still fails, "
+                "export logged-in Instagram Netscape cookies to cookies_instagram.txt, set "
+                "COOKIES_FILE_INSTAGRAM, then run `x cookies-test` and `x restart`."
+            )
     if kind == "pornhub" and any(marker in lowered for marker in ("login required", "sign in", "age verification")):
         return (
             "Pornhub requires a browser session for this video. Export Netscape cookies to "
             "cookies_pornhub.txt, set COOKIES_FILE_PORNHUB, then restart the bot."
+        )
+    if kind == "instagram" and any(
+        marker in lowered
+        for marker in (
+            "login required",
+            "sign in",
+            "private",
+            "cookies",
+            "not available",
+            "no video formats found",
+            "unable to extract",
+        )
+    ):
+        return (
+            "Instagram needs a logged-in browser session for this post/reel. Export Netscape cookies to "
+            "cookies_instagram.txt, set COOKIES_FILE_INSTAGRAM, then run `x cookies-test` and `x restart`."
         )
     if kind == "tiktok" and any(
         marker in lowered
@@ -217,6 +244,7 @@ def _sync_cookies_or_fail(settings: Settings, cleanup_dir: Path | None = None) -
                 settings.cookies_file_pornhub,
                 settings.cookies_file_tiktok,
                 settings.cookies_file_douyin,
+                settings.cookies_file_instagram,
                 settings.cookies_file,
             )
         )
@@ -239,6 +267,8 @@ def _cookie_file_for_url(url: str, settings: Settings) -> Path | None:
         candidates = [settings.cookies_file_tiktok, settings.cookies_file]
     elif kind == "douyin":
         candidates = [settings.cookies_file_douyin, settings.cookies_file]
+    elif kind == "instagram":
+        candidates = [settings.cookies_file_instagram, settings.cookies_file]
     else:
         candidates = [settings.cookies_file]
 
@@ -285,7 +315,7 @@ def _youtube_auto_download_client_sets(settings: Settings) -> list[list[str]]:
 
 
 def _request_profiles(url: str) -> list[tuple[str, object | None]]:
-    if _url_kind(url) not in {"pornhub", "tiktok", "douyin"} or ImpersonateTarget is None:
+    if _url_kind(url) not in {"pornhub", "tiktok", "douyin", "instagram"} or ImpersonateTarget is None:
         return [("default", None)]
     return [
         ("chrome", ImpersonateTarget.from_str("chrome")),
@@ -299,6 +329,7 @@ def _proxy_for_url(url: str, settings: Settings) -> str:
         "tiktok": settings.ytdlp_proxy_tiktok,
         "douyin": settings.ytdlp_proxy_douyin,
         "pornhub": settings.ytdlp_proxy_pornhub,
+        "instagram": settings.ytdlp_proxy_instagram,
     }.get(kind, "")
     return platform_proxy or settings.ytdlp_proxy
 
