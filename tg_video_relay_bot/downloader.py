@@ -177,6 +177,9 @@ def _friendly_download_error(url: str, message: str) -> str:
             "private",
             "cookies",
             "not available",
+            "isn't available to everyone",
+            "available to everyone",
+            "certain audiences",
             "no video formats found",
             "unable to extract",
         )
