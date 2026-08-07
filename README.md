@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v91: Added `/download` for iPhone Shortcuts local-save mode; VPS downloads a supported video URL, returns the video file, then cleans the temporary file.
+
 Update v90: Submit API now trims accidental spaces around the iPhone Shortcut secret and logs bad-secret length diagnostics.
 
 Update v89: Instagram audience-restricted errors now clearly tell you to use logged-in Instagram cookies.

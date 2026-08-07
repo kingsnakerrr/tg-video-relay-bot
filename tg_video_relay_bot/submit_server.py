@@ -4,13 +4,16 @@ from email import policy
 from email.parser import BytesParser
 import json
 import logging
+import mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from threading import Lock, Thread
 from time import monotonic
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 from .config import Settings
+from .downloader import cleanup_download, download_video
 from .jobs import JobQueue, VideoJob
 from .links import extract_urls
 
@@ -49,6 +52,31 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[s
     handler.send_header("Connection", "close")
     handler.end_headers()
     handler.wfile.write(body)
+
+
+def _file_response(handler: BaseHTTPRequestHandler, file_path: Path, filename: str) -> None:
+    content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    size = file_path.stat().st_size
+    encoded_filename = quote(filename)
+    handler.send_response(200)
+    handler.send_header("Content-Type", content_type)
+    handler.send_header("Content-Length", str(size))
+    handler.send_header(
+        "Content-Disposition",
+        f"attachment; filename*=UTF-8''{encoded_filename}",
+    )
+    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    handler.send_header("Access-Control-Allow-Headers", "Content-Type, X-Submit-Secret")
+    handler.send_header("Access-Control-Allow-Private-Network", "true")
+    handler.send_header("Connection", "close")
+    handler.end_headers()
+    with file_path.open("rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            handler.wfile.write(chunk)
 
 
 def _first(values: dict[str, list[str]], key: str) -> str:
@@ -109,6 +137,14 @@ def _parse_body(handler: BaseHTTPRequestHandler) -> dict[str, list[str]]:
     return _normalize_values(parse_qs(raw_body.decode("utf-8"), keep_blank_values=True))
 
 
+def _values_from_query_and_body(handler: BaseHTTPRequestHandler) -> dict[str, list[str]]:
+    parsed = urlparse(handler.path)
+    values = parse_qs(parsed.query, keep_blank_values=True)
+    body_values = _parse_body(handler)
+    values.update(body_values)
+    return _normalize_values(values)
+
+
 def _authorized(handler: BaseHTTPRequestHandler, values: dict[str, list[str]], settings: Settings) -> bool:
     if not settings.submit_api_secret:
         return False
@@ -147,6 +183,10 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
             if parsed.path == "/health":
                 _json_response(self, 200, {"ok": True})
                 return
+            if parsed.path == "/download":
+                values = parse_qs(parsed.query, keep_blank_values=True)
+                self._download(_normalize_values(values))
+                return
             if parsed.path != "/submit":
                 _json_response(self, 404, {"ok": False, "error": "not_found"})
                 return
@@ -156,14 +196,15 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
 
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
-            if parsed.path != "/submit":
+            if parsed.path not in {"/submit", "/download"}:
                 _json_response(self, 404, {"ok": False, "error": "not_found"})
                 return
             try:
-                values = parse_qs(parsed.query, keep_blank_values=True)
-                body_values = _parse_body(self)
-                values.update(body_values)
-                self._submit(_normalize_values(values))
+                values = _values_from_query_and_body(self)
+                if parsed.path == "/download":
+                    self._download(values)
+                    return
+                self._submit(values)
             except json.JSONDecodeError:
                 _json_response(self, 400, {"ok": False, "error": "invalid_json"})
             except SubmitServerError as exc:
@@ -230,6 +271,35 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
                     "duplicate_urls": duplicate_urls,
                 },
             )
+
+        def _download(self, values: dict[str, list[str]]) -> None:
+            if not _authorized(self, values, settings):
+                _json_response(self, 403, {"ok": False, "error": "bad_secret"})
+                return
+
+            text = _first(values, "url") or _first(values, "text") or _first(values, "input")
+            urls = extract_urls(text)
+            if not urls:
+                _json_response(self, 400, {"ok": False, "error": "no_supported_url"})
+                return
+
+            url = urls[0]
+            logging.info("download-api downloading url: %s", url)
+            file_path: Path | None = None
+            try:
+                download_format, _resolution_label = _highest_download_choice(url, settings)
+                result = download_video(url, settings, download_format=download_format)
+                file_path = result.file_path
+                filename = file_path.name
+                logging.info("download-api sending file: %s", file_path)
+                _file_response(self, file_path, filename)
+            except Exception as exc:
+                logging.warning("download-api failed: url=%s error=%s", url, exc)
+                _json_response(self, 500, {"ok": False, "error": str(exc)})
+            finally:
+                if file_path and file_path.exists():
+                    cleanup_download(file_path)
+                    logging.info("download-api cleaned file: %s", file_path)
 
     return SubmitHandler
 
