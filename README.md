@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v94: YouTube downloads no longer force a custom source address or browser headers, which avoids triggering YouTube "not a bot" checks when valid cookies are present.
+
 Update v93: iPhone `/download` failures now return an empty error response, so Shortcuts will not save JSON error text into Photos.
 
 Update v92: iPhone local-save downloads now return a fixed `video.mp4` transcoded to H.264/AAC for better Photos compatibility, especially for YouTube and Instagram.

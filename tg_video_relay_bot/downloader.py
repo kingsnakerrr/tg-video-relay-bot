@@ -357,9 +357,11 @@ def _base_ytdlp_options(
         "file_access_retries": 5,
         "socket_timeout": 30,
         "geo_bypass": True,
-        "http_headers": _headers_for(url),
     }
-    if settings.ytdlp_force_ipv4:
+    kind = _url_kind(url)
+    if kind != "youtube":
+        options["http_headers"] = _headers_for(url)
+    if settings.ytdlp_force_ipv4 and kind != "youtube":
         options["source_address"] = "0.0.0.0"
     if settings.ytdlp_http_chunk_size > 0:
         options["http_chunk_size"] = settings.ytdlp_http_chunk_size
