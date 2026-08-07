@@ -5,6 +5,7 @@ from email.parser import BytesParser
 import json
 import logging
 import mimetypes
+import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Lock, Thread
@@ -23,6 +24,10 @@ SUBMIT_DEDUP_SECONDS = 8.0
 
 
 class SubmitServerError(RuntimeError):
+    pass
+
+
+class LocalDownloadError(RuntimeError):
     pass
 
 
@@ -55,7 +60,7 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[s
 
 
 def _file_response(handler: BaseHTTPRequestHandler, file_path: Path, filename: str) -> None:
-    content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    content_type = mimetypes.guess_type(filename)[0] or "video/mp4"
     size = file_path.stat().st_size
     encoded_filename = quote(filename)
     handler.send_response(200)
@@ -77,6 +82,41 @@ def _file_response(handler: BaseHTTPRequestHandler, file_path: Path, filename: s
             if not chunk:
                 break
             handler.wfile.write(chunk)
+
+
+def _iphone_compatible_file(input_path: Path) -> Path:
+    output_path = input_path.with_name("iphone-video.mp4")
+    command = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(input_path),
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a?",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "20",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-movflags",
+        "+faststart",
+        "-metadata:s:v:0",
+        "rotate=0",
+        str(output_path),
+    ]
+    result = subprocess.run(command, capture_output=True, check=False, text=True)
+    if result.returncode != 0 or not output_path.exists():
+        raise LocalDownloadError(f"ffmpeg iPhone conversion failed: {result.stderr.strip()[-1200:]}")
+    return output_path
 
 
 def _first(values: dict[str, list[str]], key: str) -> str:
@@ -286,13 +326,14 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
             url = urls[0]
             logging.info("download-api downloading url: %s", url)
             file_path: Path | None = None
+            send_path: Path | None = None
             try:
                 download_format, _resolution_label = _highest_download_choice(url, settings)
                 result = download_video(url, settings, download_format=download_format)
                 file_path = result.file_path
-                filename = file_path.name
-                logging.info("download-api sending file: %s", file_path)
-                _file_response(self, file_path, filename)
+                send_path = _iphone_compatible_file(file_path)
+                logging.info("download-api sending iPhone file: %s", send_path)
+                _file_response(self, send_path, "video.mp4")
             except Exception as exc:
                 logging.warning("download-api failed: url=%s error=%s", url, exc)
                 _json_response(self, 500, {"ok": False, "error": str(exc)})
@@ -300,6 +341,9 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
                 if file_path and file_path.exists():
                     cleanup_download(file_path)
                     logging.info("download-api cleaned file: %s", file_path)
+                if send_path and send_path.exists():
+                    cleanup_download(send_path)
+                    logging.info("download-api cleaned iPhone file: %s", send_path)
 
     return SubmitHandler
 

@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v92: iPhone local-save downloads now return a fixed `video.mp4` transcoded to H.264/AAC for better Photos compatibility, especially for YouTube and Instagram.
+
 Update v91: Added `/download` for iPhone Shortcuts local-save mode; VPS downloads a supported video URL, returns the video file, then cleans the temporary file.
 
 Update v90: Submit API now trims accidental spaces around the iPhone Shortcut secret and logs bad-secret length diagnostics.
