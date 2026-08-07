@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v93: iPhone `/download` failures now return an empty error response, so Shortcuts will not save JSON error text into Photos.
+
 Update v92: iPhone local-save downloads now return a fixed `video.mp4` transcoded to H.264/AAC for better Photos compatibility, especially for YouTube and Instagram.
 
 Update v91: Added `/download` for iPhone Shortcuts local-save mode; VPS downloads a supported video URL, returns the video file, then cleans the temporary file.

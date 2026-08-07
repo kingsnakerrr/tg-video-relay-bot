@@ -59,6 +59,17 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[s
     handler.wfile.write(body)
 
 
+def _empty_response(handler: BaseHTTPRequestHandler, status: int) -> None:
+    handler.send_response(status)
+    handler.send_header("Content-Length", "0")
+    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    handler.send_header("Access-Control-Allow-Headers", "Content-Type, X-Submit-Secret")
+    handler.send_header("Access-Control-Allow-Private-Network", "true")
+    handler.send_header("Connection", "close")
+    handler.end_headers()
+
+
 def _file_response(handler: BaseHTTPRequestHandler, file_path: Path, filename: str) -> None:
     content_type = mimetypes.guess_type(filename)[0] or "video/mp4"
     size = file_path.stat().st_size
@@ -336,7 +347,7 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
                 _file_response(self, send_path, "video.mp4")
             except Exception as exc:
                 logging.warning("download-api failed: url=%s error=%s", url, exc)
-                _json_response(self, 500, {"ok": False, "error": str(exc)})
+                _empty_response(self, 502)
             finally:
                 if file_path and file_path.exists():
                     cleanup_download(file_path)
