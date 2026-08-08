@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v95: iPhone local-save downloads now skip unnecessary X/TikTok/Douyin transcoding and cap YouTube local-save downloads at 1080p to avoid Shortcuts connection timeouts. Telegram uploads still use the configured highest-quality mode.
+
 Update v94: YouTube downloads no longer force a custom source address or browser headers, which avoids triggering YouTube "not a bot" checks when valid cookies are present.
 
 Update v93: iPhone `/download` failures now return an empty error response, so Shortcuts will not save JSON error text into Photos.

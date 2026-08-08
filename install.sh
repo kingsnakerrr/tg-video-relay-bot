@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-telegram-video-relay}"
-APP_VERSION="v94"
+APP_VERSION="v95"
 DEFAULT_APP_DIR="/opt/tg-video-relay-bot"
 APP_DIR_FROM_ENV="${APP_DIR:-}"
 APP_DIR="${APP_DIR:-${DEFAULT_APP_DIR}}"

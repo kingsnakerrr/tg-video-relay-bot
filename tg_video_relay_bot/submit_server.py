@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, quote, urlparse
 
 from .config import Settings
 from .downloader import cleanup_download, download_video
+from .formats import format_for_max_height
 from .jobs import JobQueue, VideoJob
 from .links import extract_urls
 
@@ -39,11 +40,26 @@ def _is_youtube_url(url: str) -> bool:
 def _highest_download_choice(url: str, settings: Settings) -> tuple[str | None, str | None]:
     if not _is_youtube_url(url):
         return None, None
-    # Chrome/iPhone submits should download the best format yt-dlp can actually
+    # Chrome/TG submits should download the best format yt-dlp can actually
     # fetch. Locking a probed YouTube format id can fail when another player
     # client is needed for the real download.
-    return None, "最高可用"
+    return None, "highest available"
 
+
+def _local_download_choice(url: str, settings: Settings) -> tuple[str | None, str | None]:
+    if _is_youtube_url(url):
+        return format_for_max_height(1080), "iPhone 1080p"
+    return None, None
+
+
+def _needs_iphone_conversion(url: str) -> bool:
+    lowered = url.lower()
+    return (
+        "youtube.com" in lowered
+        or "youtu.be" in lowered
+        or "instagram.com" in lowered
+        or "instagr.am" in lowered
+    )
 
 def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, Any]) -> None:
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -339,12 +355,14 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
             file_path: Path | None = None
             send_path: Path | None = None
             try:
-                download_format, _resolution_label = _highest_download_choice(url, settings)
+                download_format, _resolution_label = _local_download_choice(url, settings)
                 result = download_video(url, settings, download_format=download_format)
                 file_path = result.file_path
-                send_path = _iphone_compatible_file(file_path)
+                send_path = _iphone_compatible_file(file_path) if _needs_iphone_conversion(url) else file_path
                 logging.info("download-api sending iPhone file: %s", send_path)
                 _file_response(self, send_path, "video.mp4")
+            except (BrokenPipeError, ConnectionResetError) as exc:
+                logging.info("download-api client disconnected: url=%s error=%s", url, exc)
             except Exception as exc:
                 logging.warning("download-api failed: url=%s error=%s", url, exc)
                 _empty_response(self, 502)
