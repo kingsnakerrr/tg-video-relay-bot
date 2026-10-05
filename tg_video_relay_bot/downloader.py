@@ -435,7 +435,24 @@ def _public_https_media_url(url: object) -> bool:
         return True
 
 
-def _direct_mp4_format(info: dict[str, object]) -> dict[str, object] | None:
+def _direct_mp4_format(
+    info: dict[str, object],
+    *,
+    allow_selected_unknown_codecs: bool = False,
+) -> dict[str, object] | None:
+    if allow_selected_unknown_codecs:
+        selected_vcodec = info.get("vcodec")
+        selected_acodec = info.get("acodec")
+        if (
+            info.get("ext") == "mp4"
+            and str(info.get("protocol") or "https").lower() in {"http", "https"}
+            and selected_vcodec != "none"
+            and selected_acodec != "none"
+            and not _format_has_drm(info)
+            and _public_https_media_url(info.get("url"))
+        ):
+            return info
+
     formats = info.get("formats") or [info]
     candidates = [
         item for item in formats
@@ -510,10 +527,18 @@ def resolve_direct_media(url: str, settings: Settings) -> DirectMediaResult:
                 impersonate_target=impersonate_target,
             )
             options.update({"ignore_no_formats_error": True, "socket_timeout": 15, "retries": 1, "extractor_retries": 1})
+            if kind in {"twitter", "instagram"}:
+                # These extractors expose playable progressive MP4 files with
+                # unknown codec metadata. Selecting best makes the chosen
+                # single-file URL available on the top-level info object.
+                options["format"] = "best[ext=mp4]/best"
             try:
                 with yt_dlp.YoutubeDL(options) as ydl:
                     info = ydl.extract_info(url, download=False) or {}
-                media = _direct_mp4_format(info)
+                media = _direct_mp4_format(
+                    info,
+                    allow_selected_unknown_codecs=kind in {"twitter", "instagram"},
+                )
                 if media is None:
                     raise DownloadError("No directly downloadable MP4 with audio was found.")
                 source_headers = _headers_for(url)

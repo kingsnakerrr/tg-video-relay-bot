@@ -49,6 +49,9 @@ def _highest_download_choice(url: str, settings: Settings) -> tuple[str | None, 
 def _local_download_choice(url: str, settings: Settings) -> tuple[str | None, str | None]:
     if _is_youtube_url(url):
         return format_for_max_height(1080), "iPhone 1080p"
+    lowered = url.lower()
+    if any(host in lowered for host in ("instagram.com", "instagr.am", "x.com", "twitter.com")):
+        return "best[ext=mp4][height<=1080]/best[ext=mp4]/best", "iPhone compatible"
     return None, None
 
 

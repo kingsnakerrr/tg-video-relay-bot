@@ -45,6 +45,26 @@ class DirectFormatTests(unittest.TestCase):
         ]}
         self.assertEqual(_direct_mp4_format(info)["url"], "https://cdn.example.test/avc.mp4")
 
+    def test_accepts_selected_social_mp4_with_unknown_codec_metadata(self) -> None:
+        info = {
+            "url": "https://cdn.example.test/social.mp4",
+            "ext": "mp4",
+            "protocol": "https",
+            "vcodec": None,
+            "acodec": None,
+            "format_id": "http-2176",
+            "height": 1080,
+            "formats": [{
+                "url": "https://cdn.example.test/video-only.mp4", "ext": "mp4", "protocol": "https",
+                "vcodec": "h264", "acodec": "none", "height": 1080,
+            }],
+        }
+        self.assertIsNone(_direct_mp4_format(info))
+        self.assertEqual(
+            _direct_mp4_format(info, allow_selected_unknown_codecs=True)["url"],
+            "https://cdn.example.test/social.mp4",
+        )
+
     @patch("tg_video_relay_bot.downloader.requests.Session")
     def test_probe_rejects_error_page_disguised_as_video(self, session_class) -> None:
         response = session_class.return_value.__enter__.return_value.get.return_value.__enter__.return_value
