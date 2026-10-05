@@ -393,7 +393,10 @@ def _base_ytdlp_options(
 
 
 def _direct_source_kind(url: str) -> str | None:
-    parsed = urlsplit(url)
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return None
     host = (parsed.hostname or "").lower()
     if parsed.scheme not in {"http", "https"}:
         return None
@@ -401,6 +404,14 @@ def _direct_source_kind(url: str) -> str | None:
         return "tiktok"
     if host in {"douyin.com", "iesdouyin.com"} or host.endswith((".douyin.com", ".iesdouyin.com")):
         return "douyin"
+    if host in {"youtube.com", "youtu.be"} or host.endswith(".youtube.com"):
+        return "youtube"
+    if host in {"x.com", "twitter.com"} or host.endswith((".x.com", ".twitter.com")):
+        return "twitter"
+    if host in {"instagram.com", "instagr.am"} or host.endswith(".instagram.com"):
+        return "instagram"
+    if host == "pornhub.com" or host.endswith(".pornhub.com"):
+        return "pornhub"
     return None
 
 
@@ -485,39 +496,56 @@ def _probe_direct_mp4(url: str, headers: dict[str, str]) -> bool:
 def resolve_direct_media(url: str, settings: Settings) -> DirectMediaResult:
     kind = _direct_source_kind(url)
     if kind is None:
-        raise DownloadError("Direct download supports TikTok and Douyin links only.")
+        raise DownloadError("This source is not supported for direct download.")
     url = _canonicalize_platform_url(url)
     _sync_cookies_or_fail(settings)
     last_error: Exception | None = None
+    client_sets = _youtube_auto_download_client_sets(settings) if kind == "youtube" else [[]]
     for profile, impersonate_target in _request_profiles(url):
-        options = _base_ytdlp_options(url, settings, impersonate_target=impersonate_target)
-        options.update({"ignore_no_formats_error": True, "socket_timeout": 15, "retries": 1, "extractor_retries": 1})
-        try:
-            with yt_dlp.YoutubeDL(options) as ydl:
-                info = ydl.extract_info(url, download=False) or {}
-            media = _direct_mp4_format(info)
-            if media is None:
-                raise DownloadError("No directly downloadable MP4 with audio was found.")
-            raw_headers = {**(info.get("http_headers") or {}), **(media.get("http_headers") or {})}
-            headers = {
-                key: str(value) for key, value in raw_headers.items()
-                if key.lower() in {"user-agent", "referer", "origin", "accept", "accept-language"}
-            }
-            if not _probe_direct_mp4(str(media["url"]), headers):
-                last_error = DownloadError("The extracted MP4 cannot be read directly; use the VPS download route.")
-                LOGGER.warning("Direct media probe failed: platform=%s profile=%s", kind, profile)
-                break
-            height = media.get("height")
-            LOGGER.info("Resolved direct media: platform=%s profile=%s format=%s", kind, profile, media.get("format_id"))
-            return DirectMediaResult(
-                url=str(media["url"]),
-                headers=headers,
-                format_id=str(media.get("format_id") or "unknown"),
-                height=int(height) if height else None,
+        for clients in client_sets:
+            options = _base_ytdlp_options(
+                url,
+                settings,
+                youtube_clients=clients,
+                impersonate_target=impersonate_target,
             )
-        except Exception as exc:
-            last_error = exc
-            LOGGER.warning("Direct media resolve failed: platform=%s profile=%s error=%s", kind, profile, exc)
+            options.update({"ignore_no_formats_error": True, "socket_timeout": 15, "retries": 1, "extractor_retries": 1})
+            try:
+                with yt_dlp.YoutubeDL(options) as ydl:
+                    info = ydl.extract_info(url, download=False) or {}
+                media = _direct_mp4_format(info)
+                if media is None:
+                    raise DownloadError("No directly downloadable MP4 with audio was found.")
+                raw_headers = {**(info.get("http_headers") or {}), **(media.get("http_headers") or {})}
+                headers = {
+                    key: str(value) for key, value in raw_headers.items()
+                    if key.lower() in {"user-agent", "referer", "origin", "accept", "accept-language"}
+                }
+                if not _probe_direct_mp4(str(media["url"]), headers):
+                    raise DownloadError("The extracted MP4 cannot be read directly; use the VPS download route.")
+                height = media.get("height")
+                LOGGER.info(
+                    "Resolved direct media: platform=%s profile=%s clients=%s format=%s",
+                    kind,
+                    profile,
+                    ",".join(clients) or "auto",
+                    media.get("format_id"),
+                )
+                return DirectMediaResult(
+                    url=str(media["url"]),
+                    headers=headers,
+                    format_id=str(media.get("format_id") or "unknown"),
+                    height=int(height) if height else None,
+                )
+            except Exception as exc:
+                last_error = exc
+                LOGGER.warning(
+                    "Direct media resolve failed: platform=%s profile=%s clients=%s error=%s",
+                    kind,
+                    profile,
+                    ",".join(clients) or "auto",
+                    exc,
+                )
     raise DownloadError(_friendly_download_error(url, str(last_error or "No direct media format was found.")))
 
 

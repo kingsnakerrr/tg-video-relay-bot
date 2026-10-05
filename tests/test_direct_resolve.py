@@ -25,7 +25,14 @@ class DirectFormatTests(unittest.TestCase):
     def test_only_real_platform_hosts_are_accepted(self) -> None:
         self.assertEqual(_direct_source_kind("https://v.douyin.com/abc/"), "douyin")
         self.assertEqual(_direct_source_kind("https://www.tiktok.com/@a/video/123"), "tiktok")
+        self.assertEqual(_direct_source_kind("https://youtu.be/abc"), "youtube")
+        self.assertEqual(_direct_source_kind("https://www.youtube.com/shorts/abc"), "youtube")
+        self.assertEqual(_direct_source_kind("https://x.com/user/status/123"), "twitter")
+        self.assertEqual(_direct_source_kind("https://www.instagram.com/reel/abc/"), "instagram")
+        self.assertEqual(_direct_source_kind("https://www.pornhub.com/view_video.php?viewkey=abc"), "pornhub")
         self.assertIsNone(_direct_source_kind("https://tiktok.com.evil.test/video/123"))
+        self.assertIsNone(_direct_source_kind("https://youtube.com.evil.test/watch?v=abc"))
+        self.assertIsNone(_direct_source_kind("javascript:https://youtube.com/watch?v=abc"))
         self.assertIsNone(_direct_source_kind("https://example.test/video.mp4"))
 
     def test_prefers_iphone_compatible_progressive_mp4(self) -> None:
@@ -83,6 +90,27 @@ class DirectFormatTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(DownloadError, "cannot be read directly"):
             resolve_direct_media("https://www.tiktok.com/@a/video/123", SimpleNamespace())
+
+    @patch("tg_video_relay_bot.downloader._sync_cookies_or_fail")
+    @patch("tg_video_relay_bot.downloader._probe_direct_mp4", return_value=True)
+    @patch("tg_video_relay_bot.downloader._youtube_auto_download_client_sets", return_value=[[], ["web"]])
+    @patch("tg_video_relay_bot.downloader._base_ytdlp_options", return_value={})
+    @patch("tg_video_relay_bot.downloader._request_profiles", return_value=[("default", None)])
+    @patch("tg_video_relay_bot.downloader.yt_dlp.YoutubeDL")
+    def test_youtube_tries_player_client_fallbacks(
+        self, ydl_class, _profiles, options, _clients, _probe, _sync
+    ) -> None:
+        ydl_class.return_value.__enter__.return_value.extract_info.side_effect = [
+            {"formats": []},
+            {"formats": [{
+                "url": "https://cdn.example.test/video.mp4", "ext": "mp4", "protocol": "https",
+                "vcodec": "h264", "acodec": "aac", "height": 720,
+            }]},
+        ]
+        result = resolve_direct_media("https://youtu.be/abc", SimpleNamespace())
+        self.assertEqual(result.height, 720)
+        self.assertEqual(options.call_args_list[0].kwargs["youtube_clients"], [])
+        self.assertEqual(options.call_args_list[1].kwargs["youtube_clients"], ["web"])
 
 
 class ResolveApiTests(unittest.TestCase):
