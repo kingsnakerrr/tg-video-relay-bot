@@ -72,7 +72,11 @@ class DirectFormatTests(unittest.TestCase):
         }
         result = resolve_direct_media("https://www.tiktok.com/@a/video/123", SimpleNamespace())
         self.assertEqual(result.url, "https://cdn.example.test/video.mp4")
-        self.assertEqual(result.headers, {"Referer": "https://www.tiktok.com/"})
+        self.assertEqual(result.headers["Referer"], "https://www.tiktok.com/")
+        self.assertEqual(result.headers["Origin"], "https://www.tiktok.com")
+        self.assertEqual(result.headers["Accept"], "*/*")
+        self.assertNotIn("Cookie", result.headers)
+        self.assertNotIn("Authorization", result.headers)
         self.assertEqual(result.height, 720)
         probe.assert_called_once()
 

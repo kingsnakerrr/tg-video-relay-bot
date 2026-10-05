@@ -516,7 +516,16 @@ def resolve_direct_media(url: str, settings: Settings) -> DirectMediaResult:
                 media = _direct_mp4_format(info)
                 if media is None:
                     raise DownloadError("No directly downloadable MP4 with audio was found.")
-                raw_headers = {**(info.get("http_headers") or {}), **(media.get("http_headers") or {})}
+                source_headers = _headers_for(url)
+                source_headers.update({
+                    "Accept": "*/*",
+                    "Origin": source_headers["Referer"].rstrip("/"),
+                })
+                raw_headers = {
+                    **source_headers,
+                    **(info.get("http_headers") or {}),
+                    **(media.get("http_headers") or {}),
+                }
                 headers = {
                     key: str(value) for key, value in raw_headers.items()
                     if key.lower() in {"user-agent", "referer", "origin", "accept", "accept-language"}
