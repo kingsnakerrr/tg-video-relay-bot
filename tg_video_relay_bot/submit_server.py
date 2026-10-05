@@ -14,7 +14,7 @@ from typing import Any
 from urllib.parse import parse_qs, quote, urlparse
 
 from .config import Settings
-from .downloader import cleanup_download, download_video
+from .downloader import DownloadError, cleanup_download, download_video, resolve_direct_media
 from .formats import format_for_max_height
 from .jobs import JobQueue, VideoJob
 from .links import extract_urls
@@ -263,13 +263,16 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
 
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
-            if parsed.path not in {"/submit", "/download"}:
+            if parsed.path not in {"/submit", "/download", "/resolve"}:
                 _json_response(self, 404, {"ok": False, "error": "not_found"})
                 return
             try:
                 values = _values_from_query_and_body(self)
                 if parsed.path == "/download":
                     self._download(values)
+                    return
+                if parsed.path == "/resolve":
+                    self._resolve(values)
                     return
                 self._submit(values)
             except json.JSONDecodeError:
@@ -373,6 +376,40 @@ def make_handler(settings: Settings, job_queue: JobQueue) -> type[BaseHTTPReques
                 if send_path and send_path.exists():
                     cleanup_download(send_path)
                     logging.info("download-api cleaned iPhone file: %s", send_path)
+
+        def _resolve(self, values: dict[str, list[str]]) -> None:
+            if not _authorized(self, values, settings):
+                _json_response(self, 403, {"ok": False, "error": "bad_secret"})
+                return
+
+            text = _first(values, "url") or _first(values, "text") or _first(values, "input")
+            urls = extract_urls(text)
+            if not urls:
+                _json_response(self, 400, {"ok": False, "error": "no_supported_url"})
+                return
+
+            try:
+                media = resolve_direct_media(urls[0], settings)
+            except DownloadError as exc:
+                _json_response(self, 200, {"ok": False, "mode": "server", "error": str(exc)})
+                return
+            except Exception:
+                logging.exception("resolve-api failed")
+                _json_response(self, 200, {"ok": False, "mode": "server", "error": "resolve_failed"})
+                return
+
+            _json_response(
+                self,
+                200,
+                {
+                    "ok": True,
+                    "mode": "direct",
+                    "url": media.url,
+                    "headers": media.headers,
+                    "format_id": media.format_id,
+                    "height": media.height,
+                },
+            )
 
     return SubmitHandler
 

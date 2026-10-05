@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import ipaddress
 import logging
 import re
 import shutil
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
+import requests
 import yt_dlp
 
 try:
@@ -49,6 +51,14 @@ class DownloadResult:
     file_path: Path
     title: str
     format_summary: str
+
+
+@dataclass(frozen=True)
+class DirectMediaResult:
+    url: str
+    headers: dict[str, str]
+    format_id: str
+    height: int | None
 
 
 def _canonicalize_platform_url(url: str) -> str:
@@ -380,6 +390,135 @@ def _base_ytdlp_options(
     if cookie_file:
         options["cookiefile"] = str(cookie_file)
     return options
+
+
+def _direct_source_kind(url: str) -> str | None:
+    parsed = urlsplit(url)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"}:
+        return None
+    if host == "tiktok.com" or host.endswith(".tiktok.com"):
+        return "tiktok"
+    if host in {"douyin.com", "iesdouyin.com"} or host.endswith((".douyin.com", ".iesdouyin.com")):
+        return "douyin"
+    return None
+
+
+def _public_https_media_url(url: object) -> bool:
+    if not isinstance(url, str) or len(url) > 8192:
+        return False
+    parsed = urlsplit(url)
+    host = parsed.hostname or ""
+    if (
+        parsed.scheme != "https"
+        or not host
+        or parsed.username
+        or parsed.password
+        or host == "localhost"
+        or host.endswith(".local")
+    ):
+        return False
+    try:
+        return ipaddress.ip_address(host).is_global
+    except ValueError:
+        return True
+
+
+def _direct_mp4_format(info: dict[str, object]) -> dict[str, object] | None:
+    formats = info.get("formats") or [info]
+    candidates = [
+        item for item in formats
+        if isinstance(item, dict)
+        and item.get("ext") == "mp4"
+        and str(item.get("protocol") or "https").lower() in {"http", "https"}
+        and item.get("vcodec") not in {None, "none"}
+        and item.get("acodec") not in {None, "none"}
+        and not _format_has_drm(item)
+        and _public_https_media_url(item.get("url"))
+    ]
+    if not candidates:
+        return None
+
+    def score(item: dict[str, object]) -> tuple[int, int, float]:
+        codec = str(item.get("vcodec") or "").lower()
+        h264 = codec.startswith(("avc1", "h264"))
+        try:
+            height = int(item.get("height") or 0)
+            bitrate = float(item.get("tbr") or 0)
+        except (TypeError, ValueError):
+            height, bitrate = 0, 0.0
+        return (int(h264), height, bitrate)
+
+    return max(candidates, key=score)
+
+
+def _probe_direct_mp4(url: str, headers: dict[str, str]) -> bool:
+    request_headers = {**headers, "Range": "bytes=0-31"}
+    with requests.Session() as session:
+        session.trust_env = False
+        for _ in range(4):
+            if not _public_https_media_url(url):
+                return False
+            try:
+                with session.get(
+                    url,
+                    headers=request_headers,
+                    timeout=(5, 8),
+                    stream=True,
+                    allow_redirects=False,
+                ) as response:
+                    if response.is_redirect:
+                        location = response.headers.get("Location")
+                        if not location:
+                            return False
+                        url = urljoin(url, location)
+                        continue
+                    if response.status_code not in {200, 206}:
+                        return False
+                    first = next(response.iter_content(32), b"")
+                    return len(first) >= 8 and first[4:8] == b"ftyp"
+            except requests.RequestException:
+                return False
+    return False
+
+
+def resolve_direct_media(url: str, settings: Settings) -> DirectMediaResult:
+    kind = _direct_source_kind(url)
+    if kind is None:
+        raise DownloadError("Direct download supports TikTok and Douyin links only.")
+    url = _canonicalize_platform_url(url)
+    _sync_cookies_or_fail(settings)
+    last_error: Exception | None = None
+    for profile, impersonate_target in _request_profiles(url):
+        options = _base_ytdlp_options(url, settings, impersonate_target=impersonate_target)
+        options.update({"ignore_no_formats_error": True, "socket_timeout": 15, "retries": 1, "extractor_retries": 1})
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(url, download=False) or {}
+            media = _direct_mp4_format(info)
+            if media is None:
+                raise DownloadError("No directly downloadable MP4 with audio was found.")
+            raw_headers = {**(info.get("http_headers") or {}), **(media.get("http_headers") or {})}
+            headers = {
+                key: str(value) for key, value in raw_headers.items()
+                if key.lower() in {"user-agent", "referer", "origin", "accept", "accept-language"}
+            }
+            if not _probe_direct_mp4(str(media["url"]), headers):
+                last_error = DownloadError("The extracted MP4 cannot be read directly; use the VPS download route.")
+                LOGGER.warning("Direct media probe failed: platform=%s profile=%s", kind, profile)
+                break
+            height = media.get("height")
+            LOGGER.info("Resolved direct media: platform=%s profile=%s format=%s", kind, profile, media.get("format_id"))
+            return DirectMediaResult(
+                url=str(media["url"]),
+                headers=headers,
+                format_id=str(media.get("format_id") or "unknown"),
+                height=int(height) if height else None,
+            )
+        except Exception as exc:
+            last_error = exc
+            LOGGER.warning("Direct media resolve failed: platform=%s profile=%s error=%s", kind, profile, exc)
+    raise DownloadError(_friendly_download_error(url, str(last_error or "No direct media format was found.")))
 
 
 def _probe_from_info(info: dict[str, object]) -> ResolutionProbe:

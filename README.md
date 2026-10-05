@@ -1,5 +1,7 @@
 # Telegram Video Relay Bot
 
+Update v96: Added an experimental protected `/resolve` API for TikTok and Douyin. It only returns a direct MP4 address after a small read check; blocked media addresses fall back to the existing VPS download mode. See `DIRECT_DOWNLOAD.md`.
+
 Update v95: iPhone local-save downloads now skip unnecessary X/TikTok/Douyin transcoding and cap YouTube local-save downloads at 1080p to avoid Shortcuts connection timeouts. Telegram uploads still use the configured highest-quality mode.
 
 Update v94: YouTube downloads no longer force a custom source address or browser headers, which avoids triggering YouTube "not a bot" checks when valid cookies are present.
